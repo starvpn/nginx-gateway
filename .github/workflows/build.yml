@@ -31,7 +31,7 @@ permissions:
 
 env:
   IMAGE_NAME: ${{ vars.DOCKERHUB_IMAGE || 'xianwei2022/nginx-gateway' }}
-  PLATFORMS: ${{ vars.DOCKER_PLATFORMS || 'linux/amd64,linux/arm64' }}
+  PLATFORMS: ${{ vars.DOCKER_PLATFORMS || 'linux/amd64' }}
   GO_IMAGE: ${{ vars.GO_IMAGE || 'golang:1.26.2-bookworm' }}
   NODE_IMAGE: ${{ vars.NODE_IMAGE || 'node:current-bookworm' }}
   PNPM_VERSION: ${{ vars.PNPM_VERSION || '11.1.1' }}
