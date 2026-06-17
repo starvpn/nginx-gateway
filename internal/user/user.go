@@ -197,7 +197,8 @@ func GenerateJWT(user *model.User) (*AccessTokenPayload, error) {
 	CacheToken(authToken)
 
 	return &AccessTokenPayload{
-		Token: signedToken,
+		Token:      signedToken,
+		ShortToken: shortToken,
 	}, nil
 }
 
