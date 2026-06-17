@@ -600,6 +600,17 @@ func TestService_GetDashboardAnalytics_WithCardinalityCounter(t *testing.T) {
 		return len(r.Fields) == 2
 	})).Return(&searcher.SearchResult{Hits: []*searcher.SearchHit{}}, nil)
 
+	// Mock extra-stat batch search (simplified - return empty for test focus)
+	mockSearcher.On("Search", ctx, mock.MatchedBy(func(r *searcher.SearchRequest) bool {
+		return len(r.Fields) == 6 &&
+			r.Fields[0] == "ip" &&
+			r.Fields[1] == "status" &&
+			r.Fields[2] == "method" &&
+			r.Fields[3] == "bytes_sent" &&
+			r.Fields[4] == "request_time" &&
+			r.Fields[5] == "upstream_time"
+	})).Return(&searcher.SearchResult{Hits: []*searcher.SearchHit{}}, nil)
+
 	// Mock URL facet search
 	mockSearcher.On("Search", ctx, mock.MatchedBy(func(r *searcher.SearchRequest) bool {
 		return len(r.FacetFields) == 1 && r.FacetFields[0] == "path_exact"

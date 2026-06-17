@@ -77,7 +77,28 @@ type DashboardAnalytics struct {
 	Browsers         []BrowserAccessStats `json:"browsers"`
 	OperatingSystems []OSAccessStats      `json:"operating_systems"`
 	Devices          []DeviceAccessStats  `json:"devices"`
+	ExtraStats       DashboardExtraStats  `json:"extra_stats"`
 	Summary          DashboardSummary     `json:"summary"`
+}
+
+// DashboardExtraStats represents additional traffic fields for access-log analytics.
+type DashboardExtraStats struct {
+	TopIPs            []IPAccessStats     `json:"top_ips"`
+	StatusCodes       []StatusAccessStats `json:"status_codes"`
+	Methods           []MethodAccessStats `json:"methods"`
+	TotalBytes        int64               `json:"total_bytes"`
+	AvgBytes          float64             `json:"avg_bytes"`
+	RequestTimeCount  int                 `json:"request_time_count"`
+	AvgRequestTime    float64             `json:"avg_request_time"`
+	MaxRequestTime    float64             `json:"max_request_time"`
+	UpstreamTimeCount int                 `json:"upstream_time_count"`
+	AvgUpstreamTime   float64             `json:"avg_upstream_time"`
+	MaxUpstreamTime   float64             `json:"max_upstream_time"`
+	ClientErrorCount  int                 `json:"client_error_count"`
+	ClientErrorRate   float64             `json:"client_error_rate"`
+	ServerErrorCount  int                 `json:"server_error_count"`
+	ServerErrorRate   float64             `json:"server_error_rate"`
+	BlockedIPCount    int                 `json:"blocked_ip_count"`
 }
 
 // DashboardSummary represents summary statistics for the dashboard
@@ -110,6 +131,27 @@ type DailyAccessStats struct {
 type URLAccessStats struct {
 	URL     string  `json:"url"`
 	Visits  int     `json:"visits"`
+	Percent float64 `json:"percent"`
+}
+
+// IPAccessStats represents IP access statistics.
+type IPAccessStats struct {
+	IP      string  `json:"ip"`
+	Count   int     `json:"count"`
+	Percent float64 `json:"percent"`
+}
+
+// StatusAccessStats represents HTTP status code statistics.
+type StatusAccessStats struct {
+	Status  int     `json:"status"`
+	Count   int     `json:"count"`
+	Percent float64 `json:"percent"`
+}
+
+// MethodAccessStats represents HTTP method statistics.
+type MethodAccessStats struct {
+	Method  string  `json:"method"`
+	Count   int     `json:"count"`
 	Percent float64 `json:"percent"`
 }
 

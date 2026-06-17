@@ -3,6 +3,15 @@ import { FileTextOutlined } from '@ant-design/icons-vue'
 
 export const nginxLogRoutes: RouteRecordRaw[] = [
   {
+    path: 'statistics_report',
+    name: 'Statistics Report Redirect',
+    redirect: '/dashboard/traffic_analysis',
+    meta: {
+      name: () => $gettext('流量分析'),
+      hiddenInSidebar: true,
+    },
+  },
+  {
     path: 'nginx_log',
     name: 'Nginx Log',
     meta: {

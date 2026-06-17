@@ -1,5 +1,5 @@
 import type { RouteRecordRaw } from 'vue-router'
-import { HomeOutlined } from '@ant-design/icons-vue'
+import { BarChartOutlined, HomeOutlined } from '@ant-design/icons-vue'
 
 export const dashboardRoutes: RouteRecordRaw[] = [
   {
@@ -11,6 +11,15 @@ export const dashboardRoutes: RouteRecordRaw[] = [
       icon: HomeOutlined,
     },
     children: [
+      {
+        path: 'traffic_analysis',
+        component: () => import('@/views/nginx_log/traffic/TrafficAnalytics.vue'),
+        name: 'Traffic Analysis',
+        meta: {
+          name: () => $gettext('流量分析'),
+          icon: BarChartOutlined,
+        },
+      },
       {
         path: 'server',
         component: () => import('@/views/dashboard/ServerDashBoard.vue'),

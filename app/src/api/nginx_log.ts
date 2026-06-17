@@ -24,7 +24,8 @@ export interface NginxLogData {
 }
 
 export interface AnalyticsRequest {
-  path: string
+  path?: string
+  log_paths?: string[]
   start_time?: number
   end_time?: number
   limit?: number
@@ -202,8 +203,19 @@ export interface IndexStatus {
 // Dashboard analytics interfaces
 export interface DashboardRequest {
   log_path?: string
+  log_paths?: string[]
   start_date?: string // Format: YYYY-MM-DD
   end_date?: string // Format: YYYY-MM-DD
+}
+
+export interface NginxLogListResponse {
+  data: NginxLogData[]
+  summary: {
+    total_files: number
+    indexed_files: number
+    indexing_files: number
+    document_count: number
+  }
 }
 
 export interface HourlyStats {
@@ -224,6 +236,43 @@ export interface URLStats {
   url: string
   visits: number
   percent: number
+}
+
+export interface IPAccessStats {
+  ip: string
+  count: number
+  percent: number
+}
+
+export interface StatusAccessStats {
+  status: number
+  count: number
+  percent: number
+}
+
+export interface MethodAccessStats {
+  method: string
+  count: number
+  percent: number
+}
+
+export interface DashboardExtraStats {
+  top_ips: IPAccessStats[]
+  status_codes: StatusAccessStats[]
+  methods: MethodAccessStats[]
+  total_bytes: number
+  avg_bytes: number
+  request_time_count: number
+  avg_request_time: number
+  max_request_time: number
+  upstream_time_count: number
+  avg_upstream_time: number
+  max_upstream_time: number
+  client_error_count: number
+  client_error_rate: number
+  server_error_count: number
+  server_error_rate: number
+  blocked_ip_count: number
 }
 
 export interface BrowserStats {
@@ -260,6 +309,7 @@ export interface DashboardAnalytics {
   browsers: BrowserStats[]
   operating_systems: OSStats[]
   devices: DeviceStats[]
+  extra_stats: DashboardExtraStats
   summary: DashboardSummary
 }
 
@@ -306,6 +356,10 @@ export interface GeoStats {
 }
 
 const nginx_log = extendCurdApi(useCurdApi('/nginx_logs'), {
+  list(params?: Record<string, string | number | boolean>): Promise<NginxLogListResponse> {
+    return http.get('/nginx_logs', { params })
+  },
+
   page(page = 0, data: NginxLogData | undefined = undefined) {
     return http.post(`/nginx_log/page?page=${page}`, data)
   },

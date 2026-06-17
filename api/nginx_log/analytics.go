@@ -30,10 +30,11 @@ type GeoDataItem struct {
 
 // AnalyticsRequest represents the request for log analytics
 type AnalyticsRequest struct {
-	Path      string `json:"path" form:"path"`
-	StartTime int64  `json:"start_time" form:"start_time"`
-	EndTime   int64  `json:"end_time" form:"end_time"`
-	Limit     int    `json:"limit" form:"limit"`
+	Path      string   `json:"path" form:"path"`
+	LogPaths  []string `json:"log_paths" form:"log_paths"`
+	StartTime int64    `json:"start_time" form:"start_time"`
+	EndTime   int64    `json:"end_time" form:"end_time"`
+	Limit     int      `json:"limit" form:"limit"`
 }
 
 // AdvancedSearchRequest represents the request for advanced log search
@@ -456,9 +457,43 @@ func GetLogEntries(c *gin.Context) {
 
 // DashboardRequest represents the request for dashboard analytics
 type DashboardRequest struct {
-	LogPath   string `json:"log_path" form:"log_path"`
-	StartDate string `json:"start_date" form:"start_date"` // Format: 2006-01-02
-	EndDate   string `json:"end_date" form:"end_date"`     // Format: 2006-01-02
+	LogPath   string   `json:"log_path" form:"log_path"`
+	LogPaths  []string `json:"log_paths" form:"log_paths"`
+	StartDate string   `json:"start_date" form:"start_date"` // Format: 2006-01-02
+	EndDate   string   `json:"end_date" form:"end_date"`     // Format: 2006-01-02
+}
+
+func resolveAnalyticsLogPaths(primary string, paths []string, defaultWhenEmpty bool) (string, []string, error) {
+	seen := make(map[string]struct{}, len(paths)+1)
+	normalized := make([]string, 0, len(paths)+1)
+
+	appendPath := func(path string) {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			return
+		}
+		if _, ok := seen[path]; ok {
+			return
+		}
+		seen[path] = struct{}{}
+		normalized = append(normalized, path)
+	}
+
+	for _, path := range paths {
+		appendPath(path)
+	}
+	appendPath(primary)
+
+	if len(normalized) == 0 && defaultWhenEmpty {
+		appendPath(nginx.GetAccessLogPath())
+	}
+
+	if len(normalized) == 0 {
+		return "", nil, nil
+	}
+
+	primary = normalized[0]
+	return primary, normalized, nil
 }
 
 // HourlyStats represents hourly UV/PV statistics
@@ -541,18 +576,16 @@ func GetDashboardAnalytics(c *gin.Context) {
 		return
 	}
 
-	// Use default access log path if LogPath is empty
-	if req.LogPath == "" {
-		defaultLogPath := nginx.GetAccessLogPath()
-		if defaultLogPath != "" {
-			req.LogPath = defaultLogPath
-			logger.Debugf("Using default access log path: %s", req.LogPath)
-		}
+	logPath, logPaths, resolveErr := resolveAnalyticsLogPaths(req.LogPath, req.LogPaths, true)
+	if resolveErr != nil {
+		cosy.ErrHandler(c, resolveErr)
+		return
 	}
+	req.LogPath = logPath
+	req.LogPaths = logPaths
 
-	// Validate log path if provided
-	if req.LogPath != "" {
-		if err := analyticsService.ValidateLogPath(req.LogPath); err != nil {
+	for _, path := range req.LogPaths {
+		if err := analyticsService.ValidateLogPath(path); err != nil {
 			cosy.ErrHandler(c, err)
 			return
 		}
@@ -601,7 +634,7 @@ func GetDashboardAnalytics(c *gin.Context) {
 	// Build dashboard query request
 	dashboardReq := &analytics.DashboardQueryRequest{
 		LogPath:   req.LogPath,
-		LogPaths:  []string{req.LogPath}, // Use single main log path
+		LogPaths:  req.LogPaths,
 		StartTime: startTime.Unix(),
 		EndTime:   endTime.Unix(),
 	}
@@ -648,18 +681,16 @@ func GetWorldMapData(c *gin.Context) {
 		return
 	}
 
-	// Use default access log path if Path is empty
-	if req.Path == "" {
-		defaultLogPath := nginx.GetAccessLogPath()
-		if defaultLogPath != "" {
-			req.Path = defaultLogPath
-			logger.Debugf("Using default access log path for world map: %s", req.Path)
-		}
+	logPath, logPaths, err := resolveAnalyticsLogPaths(req.Path, req.LogPaths, true)
+	if err != nil {
+		cosy.ErrHandler(c, err)
+		return
 	}
+	req.Path = logPath
+	req.LogPaths = logPaths
 
-	// Validate log path if provided
-	if req.Path != "" {
-		if err := analyticsService.ValidateLogPath(req.Path); err != nil {
+	for _, path := range req.LogPaths {
+		if err := analyticsService.ValidateLogPath(path); err != nil {
 			cosy.ErrHandler(c, err)
 			return
 		}
@@ -676,8 +707,8 @@ func GetWorldMapData(c *gin.Context) {
 		StartTime:      req.StartTime,
 		EndTime:        req.EndTime,
 		LogPath:        req.Path,
-		LogPaths:       []string{req.Path}, // Use single main log path
-		UseMainLogPath: true,               // Use main_log_path field for efficient queries
+		LogPaths:       req.LogPaths,
+		UseMainLogPath: true, // Use main_log_path field for efficient queries
 		Limit:          req.Limit,
 	}
 	logger.Debugf("WorldMapData - GeoQueryRequest: %+v", geoReq)
@@ -749,18 +780,16 @@ func GetChinaMapData(c *gin.Context) {
 		return
 	}
 
-	// Use default access log path if Path is empty
-	if req.Path == "" {
-		defaultLogPath := nginx.GetAccessLogPath()
-		if defaultLogPath != "" {
-			req.Path = defaultLogPath
-			logger.Debugf("Using default access log path for China map: %s", req.Path)
-		}
+	logPath, logPaths, err := resolveAnalyticsLogPaths(req.Path, req.LogPaths, true)
+	if err != nil {
+		cosy.ErrHandler(c, err)
+		return
 	}
+	req.Path = logPath
+	req.LogPaths = logPaths
 
-	// Validate log path if provided
-	if req.Path != "" {
-		if err := analyticsService.ValidateLogPath(req.Path); err != nil {
+	for _, path := range req.LogPaths {
+		if err := analyticsService.ValidateLogPath(path); err != nil {
 			cosy.ErrHandler(c, err)
 			return
 		}
@@ -777,8 +806,8 @@ func GetChinaMapData(c *gin.Context) {
 		StartTime:      req.StartTime,
 		EndTime:        req.EndTime,
 		LogPath:        req.Path,
-		LogPaths:       []string{req.Path}, // Use single main log path
-		UseMainLogPath: true,               // Use main_log_path field for efficient queries
+		LogPaths:       req.LogPaths,
+		UseMainLogPath: true, // Use main_log_path field for efficient queries
 		Limit:          req.Limit,
 	}
 	logger.Debugf("ChinaMapData - GeoQueryRequest: %+v", geoReq)
@@ -843,18 +872,16 @@ func GetGeoStats(c *gin.Context) {
 		return
 	}
 
-	// Use default access log path if Path is empty
-	if req.Path == "" {
-		defaultLogPath := nginx.GetAccessLogPath()
-		if defaultLogPath != "" {
-			req.Path = defaultLogPath
-			logger.Debugf("Using default access log path for geo stats: %s", req.Path)
-		}
+	logPath, logPaths, err := resolveAnalyticsLogPaths(req.Path, req.LogPaths, true)
+	if err != nil {
+		cosy.ErrHandler(c, err)
+		return
 	}
+	req.Path = logPath
+	req.LogPaths = logPaths
 
-	// Validate log path if provided
-	if req.Path != "" {
-		if err := analyticsService.ValidateLogPath(req.Path); err != nil {
+	for _, path := range req.LogPaths {
+		if err := analyticsService.ValidateLogPath(path); err != nil {
 			cosy.ErrHandler(c, err)
 			return
 		}
@@ -876,8 +903,8 @@ func GetGeoStats(c *gin.Context) {
 		StartTime:      req.StartTime,
 		EndTime:        req.EndTime,
 		LogPath:        req.Path,
-		LogPaths:       []string{req.Path}, // Use single main log path
-		UseMainLogPath: true,               // Use main_log_path field for efficient queries
+		LogPaths:       req.LogPaths,
+		UseMainLogPath: true, // Use main_log_path field for efficient queries
 		Limit:          req.Limit,
 	}
 
