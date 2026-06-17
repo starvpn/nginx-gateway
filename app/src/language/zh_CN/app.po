@@ -8271,6 +8271,222 @@ msgstr "你的 Passkeys"
 msgid "Zero-allocation pipeline"
 msgstr "零分配管道"
 
+#: src/views/site/site_add/SiteAdd.vue:257
+msgid "Custom Config"
+msgstr "自定义配置"
+
+#: src/views/site/site_add/SiteAdd.vue:277
+msgid "Other Domains"
+msgstr "其他域名"
+
+#: src/views/site/site_add/SiteAdd.vue:263
+msgid "Primary Domain"
+msgstr "主域名"
+
+#: src/views/site/site_add/SiteAdd.vue:304
+msgid "Proxy Target"
+msgstr "代理目标"
+
+#: src/views/site/site_add/SiteAdd.vue:313
+msgid "Remark"
+msgstr "备注"
+
+#: src/views/site/site_add/SiteAdd.vue:242
+msgid "Review"
+msgstr "确认"
+
+#: src/views/site/site_add/SiteAdd.vue:251
+msgid "Reverse Proxy"
+msgstr "反向代理"
+
+#: src/views/site/site_add/SiteAdd.vue:248
+msgid "Site Type"
+msgstr "站点类型"
+
+#: src/views/site/site_add/SiteAdd.vue:254
+msgid "Static Site"
+msgstr "静态站点"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:326
+msgid "Domain & Listen"
+msgstr "域名与监听"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:328
+msgid "Server Names"
+msgstr "服务名称"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:335
+msgid "HTTP Listen"
+msgstr "HTTP 监听"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:338
+msgid "HTTPS Listen"
+msgstr "HTTPS 监听"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:346
+msgid "Default Server"
+msgstr "默认站点"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:353
+msgid "For IP access with a custom port, put the IP in server_name and set the port in listen, for example listen 8080."
+msgstr "如果要使用 IP 加自定义端口访问，请把 IP 写在 server_name 中，把端口写在 listen 中，例如 listen 8080。"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:358
+msgid "Site Directory & Proxy"
+msgstr "网站目录与代理"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:360
+msgid "Site Directory"
+msgstr "网站目录"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:363
+msgid "Index Files"
+msgstr "默认文档"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:369
+msgid "Location / Content"
+msgstr "Location / 内容"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:375
+msgid "Logs"
+msgstr "日志"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:382
+msgid "Access Log Path"
+msgstr "访问日志路径"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:390
+msgid "Error Log Path"
+msgstr "错误日志路径"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:326
+msgid "Domain Settings"
+msgstr "域名设置"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:358
+msgid "Website Directory"
+msgstr "网站目录"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:366
+msgid "Default Documents"
+msgstr "默认文档"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:439
+msgid "More"
+msgstr "更多"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:443
+msgid "These website modules need dedicated backend operations instead of editing raw NGINX directives directly."
+msgstr "这些网站模块需要专用的后端操作，不适合直接通过编辑 NGINX 指令实现。"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:446
+msgid "Rate Limit"
+msgstr "流量限制"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:447
+msgid "Load Balance"
+msgstr "负载均衡"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:448
+msgid "Basic Auth"
+msgstr "密码访问"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:449
+msgid "CORS"
+msgstr "跨域"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:450
+msgid "Real IP"
+msgstr "真实 IP"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:451
+msgid "Rewrite"
+msgstr "伪静态"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:452
+msgid "Anti-leech"
+msgstr "防盗链"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:453
+msgid "Redirect"
+msgstr "重定向"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:650
+msgid "Limit Rate"
+msgstr "速率限制"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:653
+msgid "Limit Conn"
+msgstr "连接限制"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:659
+msgid "limit_conn requires a matching limit_conn_zone in the global nginx configuration."
+msgstr "limit_conn 需要在全局 NGINX 配置中配置匹配的 limit_conn_zone。"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:666
+msgid "Upstreams"
+msgstr "上游配置"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:677
+msgid "Configure upstream servers in Basic Mode > Upstream, then use an upstream name as the proxy target, for example http://backend."
+msgstr "请先在基本模式 > Upstream 中配置上游服务器，然后将上游名称作为代理目标使用，例如 http://backend。"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:684
+msgid "Auth Realm"
+msgstr "认证提示"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:687
+msgid "Password File"
+msgstr "密码文件"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:697
+msgid "Enable CORS"
+msgstr "启用跨域"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:700
+msgid "Allow Origin"
+msgstr "允许来源"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:703
+msgid "Allow Methods"
+msgstr "允许方法"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:706
+msgid "Allow Headers"
+msgstr "允许请求头"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:711
+msgid "Allow Credentials"
+msgstr "允许携带凭证"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:719
+msgid "Trusted Proxies"
+msgstr "可信代理"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:726
+msgid "Real IP Header"
+msgstr "真实 IP 请求头"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:731
+msgid "Real IP Recursive"
+msgstr "递归解析真实 IP"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:739
+msgid "Rewrite Rules"
+msgstr "伪静态规则"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:753
+msgid "Enable Anti-leech"
+msgstr "启用防盗链"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:756
+msgid "Valid Referers"
+msgstr "允许的 Referer"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:764
+msgid "Return Rule"
+msgstr "返回规则"
+
 #, fuzzy
 #~ msgid "All checks passed — you may save the configuration."
 #~ msgstr "Nginx 未能验证配置。"

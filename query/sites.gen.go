@@ -34,6 +34,16 @@ func newSite(db *gorm.DB, opts ...gen.DOOption) site {
 	_site.DeletedAt = field.NewField(tableName, "deleted_at")
 	_site.Path = field.NewString(tableName, "path")
 	_site.Advanced = field.NewBool(tableName, "advanced")
+	_site.Type = field.NewString(tableName, "type")
+	_site.PrimaryDomain = field.NewString(tableName, "primary_domain")
+	_site.Domains = field.NewField(tableName, "domains")
+	_site.Remark = field.NewString(tableName, "remark")
+	_site.SiteDir = field.NewString(tableName, "site_dir")
+	_site.ProxyTarget = field.NewString(tableName, "proxy_target")
+	_site.EnableSSL = field.NewBool(tableName, "enable_ssl")
+	_site.EnableIPv6 = field.NewBool(tableName, "enable_ipv6")
+	_site.AccessLog = field.NewBool(tableName, "access_log")
+	_site.ErrorLog = field.NewBool(tableName, "error_log")
 	_site.NamespaceID = field.NewUint64(tableName, "namespace_id")
 	_site.SyncNodeIDs = field.NewField(tableName, "sync_node_ids")
 	_site.DNSDomainID = field.NewInt(tableName, "dns_domain_id")
@@ -62,6 +72,16 @@ type site struct {
 	DeletedAt       field.Field
 	Path            field.String
 	Advanced        field.Bool
+	Type            field.String
+	PrimaryDomain   field.String
+	Domains         field.Field
+	Remark          field.String
+	SiteDir         field.String
+	ProxyTarget     field.String
+	EnableSSL       field.Bool
+	EnableIPv6      field.Bool
+	AccessLog       field.Bool
+	ErrorLog        field.Bool
 	NamespaceID     field.Uint64
 	SyncNodeIDs     field.Field
 	DNSDomainID     field.Int
@@ -92,6 +112,16 @@ func (s *site) updateTableName(table string) *site {
 	s.DeletedAt = field.NewField(table, "deleted_at")
 	s.Path = field.NewString(table, "path")
 	s.Advanced = field.NewBool(table, "advanced")
+	s.Type = field.NewString(table, "type")
+	s.PrimaryDomain = field.NewString(table, "primary_domain")
+	s.Domains = field.NewField(table, "domains")
+	s.Remark = field.NewString(table, "remark")
+	s.SiteDir = field.NewString(table, "site_dir")
+	s.ProxyTarget = field.NewString(table, "proxy_target")
+	s.EnableSSL = field.NewBool(table, "enable_ssl")
+	s.EnableIPv6 = field.NewBool(table, "enable_ipv6")
+	s.AccessLog = field.NewBool(table, "access_log")
+	s.ErrorLog = field.NewBool(table, "error_log")
 	s.NamespaceID = field.NewUint64(table, "namespace_id")
 	s.SyncNodeIDs = field.NewField(table, "sync_node_ids")
 	s.DNSDomainID = field.NewInt(table, "dns_domain_id")
@@ -115,13 +145,23 @@ func (s *site) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (s *site) fillFieldMap() {
-	s.fieldMap = make(map[string]field.Expr, 14)
+	s.fieldMap = make(map[string]field.Expr, 24)
 	s.fieldMap["id"] = s.ID
 	s.fieldMap["created_at"] = s.CreatedAt
 	s.fieldMap["updated_at"] = s.UpdatedAt
 	s.fieldMap["deleted_at"] = s.DeletedAt
 	s.fieldMap["path"] = s.Path
 	s.fieldMap["advanced"] = s.Advanced
+	s.fieldMap["type"] = s.Type
+	s.fieldMap["primary_domain"] = s.PrimaryDomain
+	s.fieldMap["domains"] = s.Domains
+	s.fieldMap["remark"] = s.Remark
+	s.fieldMap["site_dir"] = s.SiteDir
+	s.fieldMap["proxy_target"] = s.ProxyTarget
+	s.fieldMap["enable_ssl"] = s.EnableSSL
+	s.fieldMap["enable_ipv6"] = s.EnableIPv6
+	s.fieldMap["access_log"] = s.AccessLog
+	s.fieldMap["error_log"] = s.ErrorLog
 	s.fieldMap["namespace_id"] = s.NamespaceID
 	s.fieldMap["sync_node_ids"] = s.SyncNodeIDs
 	s.fieldMap["dns_domain_id"] = s.DNSDomainID

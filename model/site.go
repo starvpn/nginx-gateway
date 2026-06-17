@@ -4,6 +4,16 @@ type Site struct {
 	Model
 	Path            string     `json:"path" gorm:"uniqueIndex"`
 	Advanced        bool       `json:"advanced"`
+	Type            string     `json:"type"`
+	PrimaryDomain   string     `json:"primary_domain"`
+	Domains         []string   `json:"domains" gorm:"serializer:json"`
+	Remark          string     `json:"remark"`
+	SiteDir         string     `json:"site_dir"`
+	ProxyTarget     string     `json:"proxy_target"`
+	EnableSSL       bool       `json:"enable_ssl"`
+	EnableIPv6      bool       `json:"enable_ipv6"`
+	AccessLog       bool       `json:"access_log"`
+	ErrorLog        bool       `json:"error_log"`
 	NamespaceID     uint64     `json:"namespace_id"`
 	Namespace       *Namespace `json:"namespace,omitempty"`
 	SyncNodeIDs     []uint64   `json:"sync_node_ids" gorm:"serializer:json"`

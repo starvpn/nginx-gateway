@@ -31,6 +31,8 @@ func InitRouter(r *gin.RouterGroup) {
 		o.POST("sites/batch/enable", BatchEnableSites)
 		// batch disable sites
 		o.POST("sites/batch/disable", BatchDisableSites)
+		// create site from a structured blueprint
+		o.POST("sites", CreateSite)
 		// rename site
 		o.POST("sites/:name/rename", RenameSite)
 		// enable site

@@ -6,6 +6,7 @@ import type { ConfigStatus, PrivateKeyType } from '@/constants'
 import { extendCurdApi, http, useCurdApi } from '@uozi-admin/request'
 
 export type SiteStatus = ConfigStatus.Enabled | ConfigStatus.Disabled | ConfigStatus.Maintenance
+export type SiteType = 'static' | 'reverse_proxy' | 'custom'
 
 export interface ProxyTarget {
   host: string
@@ -17,6 +18,16 @@ export interface Site extends ModelBase {
   modified_at: string
   path: string
   advanced: boolean
+  type: SiteType
+  primary_domain: string
+  domains: string[]
+  remark: string
+  site_dir: string
+  proxy_target: string
+  enable_ssl: boolean
+  enable_ipv6: boolean
+  access_log: boolean
+  error_log: boolean
   name: string
   filepath: string
   config: string
@@ -36,6 +47,37 @@ export interface Site extends ModelBase {
   dns_record_exists?: boolean | null
 }
 
+export interface CreateSiteRequest {
+  name: string
+  type: SiteType
+  primary_domain: string
+  domains: string[]
+  remark: string
+  site_dir: string
+  index: string
+  proxy_target: string
+  enable_ssl: boolean
+  enable_ipv6: boolean
+  access_log: boolean
+  error_log: boolean
+  custom_content: string
+  namespace_id: number
+  sync_node_ids: number[]
+  overwrite: boolean
+  post_action: string
+  dns_domain_id?: number | null
+  dns_record_id?: string | null
+  dns_record_name?: string | null
+  dns_record_type?: string | null
+}
+
+export interface CreateSiteResponse {
+  message: string
+  name: string
+  site: Site
+  content: string
+}
+
 export interface AutoCertRequest {
   dns_credential_id: number | null
   challenge_method: string
@@ -47,6 +89,7 @@ export interface AutoCertRequest {
 const baseUrl = '/sites'
 
 const site = extendCurdApi(useCurdApi<Site>(baseUrl), {
+  create: (data: CreateSiteRequest) => http.post<CreateSiteResponse>(baseUrl, data),
   enable: (name: string) => http.post(`${baseUrl}/${encodeURIComponent(name)}/enable`),
   disable: (name: string) => http.post(`${baseUrl}/${encodeURIComponent(name)}/disable`),
   batchEnable: (names: string[]) => http.post(`${baseUrl}/batch/enable`, { names }),

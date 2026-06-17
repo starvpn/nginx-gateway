@@ -39,6 +39,7 @@ watch(advanceMode, val => {
     >
       <ATabs
         v-model:active-key="activeKey"
+        class="right-settings-tabs"
         size="small"
       >
         <ATabPane key="basic" :tab="$gettext('Basic')">
@@ -77,14 +78,14 @@ watch(advanceMode, val => {
     padding: 0;
   }
 
-  :deep(.ant-tabs-nav) {
+  :deep(.right-settings-tabs > .ant-tabs-nav) {
     margin: 0;
     padding: 0 24px;
     height: 55px;
   }
 }
 
-:deep(.ant-tabs-content) {
+:deep(.right-settings-tabs > .ant-tabs-content-holder > .ant-tabs-content) {
   padding-top: 24px;
   overflow-y: auto;
 }
