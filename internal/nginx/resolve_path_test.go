@@ -58,6 +58,61 @@ configure arguments: --prefix="/Program Files/Nginx" --conf-path='/Program Files
 	}
 }
 
+func TestOpenRestyRelativeConfigurePathsUsePrefix(t *testing.T) {
+	originalConfigDir := settings.NginxSettings.ConfigDir
+	originalConfigPath := settings.NginxSettings.ConfigPath
+	originalPIDPath := settings.NginxSettings.PIDPath
+	originalAccessLogPath := settings.NginxSettings.AccessLogPath
+	originalErrorLogPath := settings.NginxSettings.ErrorLogPath
+	originalNginxVOutput := nginxVOutput
+	originalNginxTOutput := nginxTOutput
+	originalNginxPrefix := nginxPrefix
+
+	t.Cleanup(func() {
+		settings.NginxSettings.ConfigDir = originalConfigDir
+		settings.NginxSettings.ConfigPath = originalConfigPath
+		settings.NginxSettings.PIDPath = originalPIDPath
+		settings.NginxSettings.AccessLogPath = originalAccessLogPath
+		settings.NginxSettings.ErrorLogPath = originalErrorLogPath
+		nginxVOutput = originalNginxVOutput
+		nginxTOutput = originalNginxTOutput
+		nginxPrefix = originalNginxPrefix
+	})
+
+	settings.NginxSettings.ConfigDir = ""
+	settings.NginxSettings.ConfigPath = ""
+	settings.NginxSettings.PIDPath = ""
+	settings.NginxSettings.AccessLogPath = ""
+	settings.NginxSettings.ErrorLogPath = ""
+	nginxPrefix = ""
+	nginxTOutput = ""
+
+	prefix := "/usr/local/openresty/nginx"
+	nginxVOutput = fmt.Sprintf(`
+nginx version: openresty/1.27.1.2
+configure arguments: --prefix=%s --conf-path=conf/nginx.conf --pid-path=logs/nginx.pid --http-log-path=logs/access.log --error-log-path=logs/error.log --modules-path=modules
+`, prefix)
+
+	if got := GetConfPath(); got != filepath.Join(prefix, "conf") {
+		t.Fatalf("GetConfPath() = %q, want %q", got, filepath.Join(prefix, "conf"))
+	}
+	if got := GetConfEntryPath(); got != filepath.Join(prefix, "conf/nginx.conf") {
+		t.Fatalf("GetConfEntryPath() = %q, want %q", got, filepath.Join(prefix, "conf/nginx.conf"))
+	}
+	if got := GetPIDPath(); got != filepath.Join(prefix, "logs/nginx.pid") {
+		t.Fatalf("GetPIDPath() = %q, want %q", got, filepath.Join(prefix, "logs/nginx.pid"))
+	}
+	if got := GetAccessLogPath(); got != filepath.Join(prefix, "logs/access.log") {
+		t.Fatalf("GetAccessLogPath() = %q, want %q", got, filepath.Join(prefix, "logs/access.log"))
+	}
+	if got := GetErrorLogPath(); got != filepath.Join(prefix, "logs/error.log") {
+		t.Fatalf("GetErrorLogPath() = %q, want %q", got, filepath.Join(prefix, "logs/error.log"))
+	}
+	if got := GetModulesPath(); got != filepath.Join(prefix, "modules") {
+		t.Fatalf("GetModulesPath() = %q, want %q", got, filepath.Join(prefix, "modules"))
+	}
+}
+
 func TestGetConfAndPidPathsHandleSpaces(t *testing.T) {
 	originalConfigDir := settings.NginxSettings.ConfigDir
 	originalConfigPath := settings.NginxSettings.ConfigPath

@@ -13,6 +13,7 @@ import {
   OpenAISettings,
   ServerSettings,
   TerminalSettings,
+  WAFSettings,
 } from '@/views/preference/tabs'
 import useSystemSettingsStore from './store'
 
@@ -95,6 +96,12 @@ onMounted(() => {
           :tab="$gettext('Nginx')"
         >
           <NginxSettings />
+        </ATabPane>
+        <ATabPane
+          key="waf"
+          :tab="$gettext('WAF')"
+        >
+          <WAFSettings />
         </ATabPane>
         <ATabPane
           key="openai"

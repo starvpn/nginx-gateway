@@ -196,6 +196,9 @@ func TestPatchOnDiskWithBackup_DoesNotMutateTargetOnWriteError(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX-only test: relies on chmod 0o555 to make a directory read-only")
 	}
+	if os.Geteuid() == 0 {
+		t.Skip("root can write to chmod 0o555 directories; cannot force write error reliably")
+	}
 
 	target := withFixture(t, "customized-unfixed.conf")
 	orig, _ := os.ReadFile(target)

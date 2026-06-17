@@ -122,7 +122,7 @@ If you want to completely remove all data, please delete these directories manua
 
 ## Install with Docker
 
-Our docker image [uozi/nginx-ui:latest](https://hub.docker.com/r/uozi/nginx-ui) is based on the latest nginx image and
+Our docker image [uozi/nginx-ui:latest](https://hub.docker.com/r/uozi/nginx-ui) bundles OpenResty as its Nginx-compatible runtime and
 can be used to replace the Nginx on the host. By publishing the container's port 80 and 443 to the host,
 you can easily make the switch.
 

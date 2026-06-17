@@ -21,18 +21,44 @@ func GetNginxExeDir() string {
 	return filepath.Dir(getNginxSbinPath())
 }
 
-// Resolves relative paths by joining them with the nginx executable directory on Windows
+// Resolves user-provided paths. Historically relative paths were resolved
+// against the nginx executable directory on Windows and left untouched on Unix;
+// keep that behaviour for user overrides.
 func resolvePath(path string) string {
 	if path == "" {
 		return ""
 	}
 
-	// Handle relative paths on Windows
-	if runtime.GOOS == "windows" && !filepath.IsAbs(path) {
-		return filepath.Join(GetNginxExeDir(), path)
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path)
 	}
 
-	return path
+	// Handle relative paths on Windows
+	if runtime.GOOS == "windows" {
+		return filepath.Clean(filepath.Join(GetNginxExeDir(), path))
+	}
+
+	return filepath.Clean(path)
+}
+
+func resolveConfigurePath(path string) string {
+	if path == "" {
+		return ""
+	}
+
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path)
+	}
+
+	if runtime.GOOS == "windows" {
+		return filepath.Clean(filepath.Join(GetNginxExeDir(), path))
+	}
+
+	prefix := GetPrefix()
+	if prefix == "" {
+		return filepath.Clean(path)
+	}
+	return filepath.Clean(filepath.Join(prefix, path))
 }
 
 func extractConfigureArg(out, flag string) string {
@@ -110,12 +136,15 @@ func GetPrefix() string {
 func GetConfPath(dir ...string) (confPath string) {
 	if settings.NginxSettings.ConfigDir == "" {
 		out := getNginxV()
-		fullConf := extractConfigureArg(out, "--conf-path")
+		fullConf := resolveConfigurePath(extractConfigureArg(out, "--conf-path"))
 
 		if fullConf != "" {
 			confPath = filepath.Dir(fullConf)
 		} else {
-			if runtime.GOOS == "windows" {
+			prefix := resolvePath(extractConfigureArg(out, "--prefix"))
+			if prefix != "" {
+				confPath = filepath.Join(prefix, "conf")
+			} else if runtime.GOOS == "windows" {
 				confPath = GetPrefix()
 			} else {
 				confPath = "/etc/nginx"
@@ -142,7 +171,7 @@ func GetConfPath(dir ...string) (confPath string) {
 func GetConfEntryPath() (path string) {
 	if settings.NginxSettings.ConfigPath == "" {
 		out := getNginxV()
-		path = extractConfigureArg(out, "--conf-path")
+		path = resolveConfigurePath(extractConfigureArg(out, "--conf-path"))
 
 		if path == "" {
 			baseDir := GetConfPath()
@@ -174,7 +203,7 @@ func GetPIDPath() (path string) {
 
 	// Try compile-time default from nginx -V
 	out := getNginxV()
-	path = extractConfigureArg(out, "--pid-path")
+	path = resolveConfigurePath(extractConfigureArg(out, "--pid-path"))
 
 	// When running in another container, verify the path actually exists there.
 	// Docker images like nginx-unprivileged override the compile-time pid-path
@@ -199,6 +228,9 @@ func GetPIDPath() (path string) {
 			"/var/run/nginx.pid",
 			"/run/nginx.pid",
 			"/tmp/nginx.pid",
+		}
+		if prefix := GetPrefix(); prefix != "" {
+			candidates = append(candidates, filepath.Join(prefix, "logs/nginx.pid"))
 		}
 
 		for _, c := range candidates {
@@ -237,7 +269,7 @@ func GetAccessLogPath() (path string) {
 
 	if path == "" {
 		out := getNginxV()
-		path = extractConfigureArg(out, "--http-log-path")
+		path = resolveConfigurePath(extractConfigureArg(out, "--http-log-path"))
 		if path != "" {
 			resolvedPath := resolvePath(path)
 
@@ -266,7 +298,7 @@ func GetErrorLogPath() string {
 
 	if path == "" {
 		out := getNginxV()
-		path = extractConfigureArg(out, "--error-log-path")
+		path = resolveConfigurePath(extractConfigureArg(out, "--error-log-path"))
 		if path != "" {
 			resolvedPath := resolvePath(path)
 
@@ -295,13 +327,16 @@ func GetModulesPath() string {
 	out := getNginxV()
 	if out != "" {
 		if path := extractConfigureArg(out, "--modules-path"); path != "" {
-			return resolvePath(path)
+			return resolveConfigurePath(path)
 		}
 	}
 
 	// Default path if not found
 	if runtime.GOOS == "windows" {
 		return resolvePath("modules")
+	}
+	if prefix := GetPrefix(); prefix != "" && prefix != "/usr/local/nginx" {
+		return filepath.Join(prefix, "modules")
 	}
 	return resolvePath("/usr/lib/nginx/modules")
 }

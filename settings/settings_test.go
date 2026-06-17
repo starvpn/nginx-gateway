@@ -80,6 +80,15 @@ func TestSetup(t *testing.T) {
 	_ = os.Setenv("NGINX_UI_NGINX_RESTART_CMD", "nginx -s restart")
 	_ = os.Setenv("NGINX_UI_NGINX_LOG_DIR_WHITE_LIST", "/var/log/nginx")
 
+	// WAF
+	_ = os.Setenv("NGINX_UI_WAF_ENABLED", "true")
+	_ = os.Setenv("NGINX_UI_WAF_MODE", "ACTIVE")
+	_ = os.Setenv("NGINX_UI_WAF_SCORE_THRESHOLD", "8")
+	_ = os.Setenv("NGINX_UI_WAF_DENY_STATUS", "406")
+	_ = os.Setenv("NGINX_UI_WAF_DEBUG", "true")
+	_ = os.Setenv("NGINX_UI_WAF_EVENT_LOG_ALTERED_ONLY", "false")
+	_ = os.Setenv("NGINX_UI_WAF_CONFIG_PATH", "/tmp/nginx/waf/settings.lua")
+
 	// Node
 	_ = os.Setenv("NGINX_UI_NODE_NAME", "test")
 	_ = os.Setenv("NGINX_UI_NODE_SECRET", "nodeSecret")
@@ -170,8 +179,17 @@ func TestSetup(t *testing.T) {
 	assert.Equal(t, "/var/run/nginx.pid", NginxSettings.PIDPath)
 	assert.Equal(t, "nginx -t", NginxSettings.TestConfigCmd)
 	assert.Equal(t, "nginx -s reload", NginxSettings.ReloadCmd)
-	assert.Equal(t, "nginx -s stop", NginxSettings.RestartCmd)
+	assert.Equal(t, "nginx -s restart", NginxSettings.RestartCmd)
 	assert.Equal(t, []string{"/var/log/nginx"}, NginxSettings.LogDirWhiteList)
+
+	// WAF
+	assert.Equal(t, true, WAFSettings.Enabled)
+	assert.Equal(t, "ACTIVE", WAFSettings.Mode)
+	assert.Equal(t, 8, WAFSettings.ScoreThreshold)
+	assert.Equal(t, 406, WAFSettings.DenyStatus)
+	assert.Equal(t, true, WAFSettings.Debug)
+	assert.Equal(t, false, WAFSettings.EventLogAlteredOnly)
+	assert.Equal(t, "/tmp/nginx/waf/settings.lua", WAFSettings.ConfigPath)
 
 	// Node
 	assert.Equal(t, "test", NodeSettings.Name)

@@ -27,17 +27,21 @@ func getNginxSbinPath() string {
 		return nginxSbinPath
 	}
 
-	// load from system
-	var path string
-	var err error
+	// load from system. OpenResty keeps nginx-compatible CLI semantics, but
+	// some host installations expose only the `openresty` wrapper in PATH.
+	candidates := []string{"nginx"}
 	if runtime.GOOS == "windows" {
-		path, err = exec.LookPath("nginx.exe")
+		candidates = []string{"nginx.exe"}
 	} else {
-		path, err = exec.LookPath("nginx")
+		candidates = append(candidates, "openresty")
 	}
-	if err == nil {
-		nginxSbinPath = path
-		return nginxSbinPath
+
+	for _, name := range candidates {
+		path, err := exec.LookPath(name)
+		if err == nil {
+			nginxSbinPath = path
+			return nginxSbinPath
+		}
 	}
 	return nginxSbinPath
 }
@@ -50,6 +54,9 @@ func getNginxV() string {
 
 	// load from system
 	exePath := getNginxSbinPath()
+	if exePath == "" {
+		return ""
+	}
 	out, err := execCommand(exePath, "-V")
 	if err != nil {
 		logger.Error(err)
@@ -69,6 +76,9 @@ func getNginxT() string {
 
 	// load from system
 	exePath := getNginxSbinPath()
+	if exePath == "" {
+		return ""
+	}
 	out, err := execCommand(exePath, "-T")
 	if err != nil {
 		logger.Error(err)

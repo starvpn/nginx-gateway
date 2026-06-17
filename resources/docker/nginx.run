@@ -6,4 +6,7 @@ if [ -n "${TZ}" ]; then
     echo "${TZ}" > /etc/timezone
 fi
 
+# The bundled runtime is OpenResty, but the image keeps a nginx-compatible
+# command and /etc/nginx layout so existing settings, volumes, and reload
+# commands continue to work.
 nginx -g "daemon off;"

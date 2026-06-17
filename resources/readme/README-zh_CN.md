@@ -172,7 +172,7 @@ systemctl restart nginx-ui
 
 #### 使用 Docker
 
-您可以在 docker 中使用我们提供的 `uozi/nginx-ui:latest` [镜像](https://hub.docker.com/r/uozi/nginx-ui)，此镜像基于 `nginx:latest` 构建。您可以直接将其监听到 80 和 443 端口以取代宿主机上的 Nginx。
+您可以在 docker 中使用我们提供的 `uozi/nginx-ui:latest` [镜像](https://hub.docker.com/r/uozi/nginx-ui)，此镜像内置 OpenResty 作为兼容 Nginx 的运行时。您可以直接将其监听到 80 和 443 端口以取代宿主机上的 Nginx。
 
 注意：映射到 `/etc/nginx` 的文件夹应该为一个空目录。
 

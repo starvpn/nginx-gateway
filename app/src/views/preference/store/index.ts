@@ -79,6 +79,15 @@ const useSystemSettingsStore = defineStore('systemSettings', () => {
       indexing_enabled: false,
       index_path: '',
     },
+    waf: {
+      enabled: false,
+      mode: 'SIMULATE',
+      score_threshold: 5,
+      deny_status: 403,
+      debug: false,
+      event_log_altered_only: true,
+      config_path: '/etc/nginx/waf/settings.lua',
+    },
     node: {
       name: '',
       secret: '',

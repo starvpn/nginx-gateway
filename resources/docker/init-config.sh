@@ -1,8 +1,10 @@
 #!/bin/bash
 # Initialize /etc/nginx on first boot, and upgrade bundled project files
 # (e.g. conf.d/nginx-ui.conf) when they are still byte-equal to a known
-# historical official default. Customized files are left alone; the UI
-# self_check task surfaces them as a one-click fix.
+# historical official default. The bundled runtime is OpenResty, but we keep
+# the /etc/nginx layout for Nginx-compatible config and existing volumes.
+# Customized files are left alone; the UI self_check task surfaces them as a
+# one-click fix.
 #
 # Override paths via env vars (used by bats tests).
 # Sourcing the script with `--testing` defines functions and returns without

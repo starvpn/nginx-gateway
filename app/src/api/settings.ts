@@ -78,6 +78,16 @@ export interface NginxLogSettings {
   index_path: string
 }
 
+export interface WAFSettings {
+  enabled: boolean
+  mode: 'SIMULATE' | 'ACTIVE' | 'INACTIVE'
+  score_threshold: number
+  deny_status: number
+  debug: boolean
+  event_log_altered_only: boolean
+  config_path: string
+}
+
 export interface NodeSettings {
   name: string
   secret: string
@@ -135,6 +145,7 @@ export interface Settings {
   logrotate: LogrotateSettings
   nginx: NginxSettings
   nginx_log: NginxLogSettings
+  waf: WAFSettings
   node: NodeSettings
   openai: OpenaiSettings
   terminal: TerminalSettings

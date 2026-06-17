@@ -10,6 +10,7 @@ import (
 	"github.com/0xJacky/Nginx-UI/internal/cron"
 	"github.com/0xJacky/Nginx-UI/internal/nginx"
 	"github.com/0xJacky/Nginx-UI/internal/system"
+	internalwaf "github.com/0xJacky/Nginx-UI/internal/waf"
 	"github.com/0xJacky/Nginx-UI/settings"
 	"github.com/gin-gonic/gin"
 	"github.com/uozi-tech/cosy"
@@ -28,6 +29,7 @@ type saveSettingsPayload struct {
 	Openai    settings.OpenAI    `json:"openai"`
 	Logrotate settings.Logrotate `json:"logrotate"`
 	Nginx     settings.Nginx     `json:"nginx"`
+	Waf       settings.WAF       `json:"waf"`
 	Oidc      settings.OIDC      `json:"oidc"`
 }
 
@@ -73,6 +75,7 @@ func buildSettingsResponse() gin.H {
 		"node":      node,
 		"openai":    openai,
 		"terminal":  settings.TerminalSettings,
+		"waf":       settings.WAFSettings.WithDefaults(),
 		"webauthn":  settings.WebAuthnSettings,
 	}
 }
@@ -175,6 +178,10 @@ func SaveSettings(c *gin.Context) {
 		return
 	}
 
+	json.Waf = internalwaf.Normalize(json.Waf)
+	oldWAF := internalwaf.Normalize(*settings.WAFSettings)
+	wafChanged := oldWAF != json.Waf
+
 	err := settings.Update(func() {
 		cSettings.ProtectedFill(cSettings.AppSettings, &json.App)
 		cSettings.ProtectedFill(cSettings.ServerSettings, &json.Server)
@@ -185,11 +192,32 @@ func SaveSettings(c *gin.Context) {
 		cSettings.ProtectedFill(settings.OpenAISettings, &json.Openai)
 		cSettings.ProtectedFill(settings.LogrotateSettings, &json.Logrotate)
 		cSettings.ProtectedFill(settings.NginxSettings, &json.Nginx)
+		cSettings.ProtectedFill(settings.WAFSettings, &json.Waf)
+		settings.WAFSettings.ApplyDefaults()
 		cSettings.ProtectedFill(settings.OIDCSettings, &json.Oidc)
 	})
 	if err != nil {
 		cosy.ErrHandler(c, err)
 		return
+	}
+
+	if wafChanged {
+		if err := internalwaf.WriteRuntimeConfig(*settings.WAFSettings); err != nil {
+			cosy.ErrHandler(c, err)
+			return
+		}
+
+		testResult := nginx.Control(nginx.TestConfig)
+		if testResult.IsError() {
+			cosy.ErrHandler(c, testResult.GetError())
+			return
+		}
+
+		reloadResult := nginx.Control(nginx.Reload)
+		if reloadResult.IsError() {
+			cosy.ErrHandler(c, reloadResult.GetError())
+			return
+		}
 	}
 
 	GetSettings(c)

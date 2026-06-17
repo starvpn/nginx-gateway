@@ -43,6 +43,7 @@ var envPrefixMap = map[string]interface{}{
 	"OPENAI":     OpenAISettings,
 	"SITE_CHECK": SiteCheckSettings,
 	"TERMINAL":   TerminalSettings,
+	"WAF":        WAFSettings,
 	"WEBAUTHN":   WebAuthnSettings,
 	"BACKUP":     BackupSettings,
 	"OIDC":       OIDCSettings,
@@ -68,6 +69,7 @@ func init() {
 	sections.Set("openai", OpenAISettings)
 	sections.Set("site_check", SiteCheckSettings)
 	sections.Set("terminal", TerminalSettings)
+	sections.Set("waf", WAFSettings)
 	sections.Set("webauthn", WebAuthnSettings)
 
 	for k, v := range sections.AllFromFront() {
@@ -91,9 +93,10 @@ func Init(confPath string) {
 		parseEnv(ptr, prefix+"_")
 	}
 
-	// if in official docker, set the restart cmd of nginx to "nginx -s stop",
-	// then the supervisor of s6-overlay will start the nginx again.
-	if helper.InNginxUIOfficialDocker() {
+	// In the bundled Docker image, restart by stopping the supervised
+	// nginx-compatible OpenResty process; s6-overlay starts it again. Do not
+	// override an explicit user/env setting.
+	if helper.InNginxUIOfficialDocker() && NginxSettings.RestartCmd == "" {
 		NginxSettings.RestartCmd = "nginx -s stop"
 	}
 
@@ -104,6 +107,8 @@ func Init(confPath string) {
 	if AuthSettings.MaxAttempts <= 0 {
 		AuthSettings.MaxAttempts = 10
 	}
+
+	WAFSettings.ApplyDefaults()
 }
 
 func Update(fn func()) (err error) {

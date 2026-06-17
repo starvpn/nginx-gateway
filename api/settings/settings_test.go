@@ -44,6 +44,7 @@ func TestGetSettingsRedactsSensitiveFields(t *testing.T) {
 	originalNodeSecret := appsettings.NodeSettings.Secret
 	originalNodeName := appsettings.NodeSettings.Name
 	originalOpenAIToken := appsettings.OpenAISettings.Token
+	originalWAF := *appsettings.WAFSettings
 	originalReloadCmd := appsettings.NginxSettings.ReloadCmd
 	originalRestartCmd := appsettings.NginxSettings.RestartCmd
 	defer func() {
@@ -52,6 +53,7 @@ func TestGetSettingsRedactsSensitiveFields(t *testing.T) {
 		appsettings.NodeSettings.Secret = originalNodeSecret
 		appsettings.NodeSettings.Name = originalNodeName
 		appsettings.OpenAISettings.Token = originalOpenAIToken
+		*appsettings.WAFSettings = originalWAF
 		appsettings.NginxSettings.ReloadCmd = originalReloadCmd
 		appsettings.NginxSettings.RestartCmd = originalRestartCmd
 	}()
@@ -61,6 +63,15 @@ func TestGetSettingsRedactsSensitiveFields(t *testing.T) {
 	appsettings.NodeSettings.Secret = "node-secret"
 	appsettings.NodeSettings.Name = "local-node"
 	appsettings.OpenAISettings.Token = "openai-secret"
+	*appsettings.WAFSettings = appsettings.WAF{
+		Enabled:             true,
+		Mode:                "ACTIVE",
+		ScoreThreshold:      8,
+		DenyStatus:          406,
+		Debug:               true,
+		EventLogAlteredOnly: false,
+		ConfigPath:          "/tmp/waf/settings.lua",
+	}
 	appsettings.NginxSettings.ReloadCmd = "nginx -s reload"
 	appsettings.NginxSettings.RestartCmd = "nginx -s restart"
 
@@ -80,6 +91,13 @@ func TestGetSettingsRedactsSensitiveFields(t *testing.T) {
 	assert.Equal(t, redactedSensitiveValue, body["node"]["secret"])
 	assert.Equal(t, "local-node", body["node"]["name"])
 	assert.Equal(t, redactedSensitiveValue, body["openai"]["token"])
+	assert.Equal(t, true, body["waf"]["enabled"])
+	assert.Equal(t, "ACTIVE", body["waf"]["mode"])
+	assert.Equal(t, float64(8), body["waf"]["score_threshold"])
+	assert.Equal(t, float64(406), body["waf"]["deny_status"])
+	assert.Equal(t, true, body["waf"]["debug"])
+	assert.Equal(t, false, body["waf"]["event_log_altered_only"])
+	assert.Equal(t, "/tmp/waf/settings.lua", body["waf"]["config_path"])
 }
 
 func TestRestoreRedactedSensitiveSettings(t *testing.T) {

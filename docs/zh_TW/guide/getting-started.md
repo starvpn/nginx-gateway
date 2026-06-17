@@ -118,7 +118,7 @@ brew untap 0xjacky/tools
 ## 使用 Docker
 
 您可以在 docker 中使用我們提供的 `uozi/nginx-ui:latest` [映像檔](https://hub.docker.com/r/uozi/nginx-ui)
-，此映像檔基於 `nginx:latest` 建構。您可以直接將其監聽到 80 和 443 連接埠以取代宿主機上的 Nginx。
+，此映像檔內建 OpenResty 作為相容 Nginx 的執行環境。您可以直接將其監聽到 80 和 443 連接埠以取代宿主機上的 Nginx。
 
 ::: tip 提示
 
