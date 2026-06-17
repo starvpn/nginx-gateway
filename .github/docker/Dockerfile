@@ -45,6 +45,7 @@ ARG GOARM=
 ARG CGO_ENABLED=1
 ARG LD_FLAGS=
 ARG BUILD_TIME=
+ARG COMMIT_HASH=unknown
 WORKDIR /src
 RUN apt-get update -y \
     && apt-get install -y --no-install-recommends ca-certificates git \
@@ -53,7 +54,18 @@ COPY . .
 COPY --from=frontend /src/app/dist ./app/dist
 RUN --mount=type=cache,id=nginx-ui-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=nginx-ui-go-build,target=/root/.cache/go-build \
-    go generate
+    set -eux; \
+    mkdir -p /tmp/git-bin; \
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'if [ "$1" = "-C" ] && [ "$3" = "rev-parse" ] && [ "$4" = "HEAD" ]; then' \
+        '  printf "%s\n" "$COMMIT_HASH"' \
+        '  exit 0' \
+        'fi' \
+        'exec /usr/bin/git "$@"' \
+        > /tmp/git-bin/git; \
+    chmod +x /tmp/git-bin/git; \
+    COMMIT_HASH="${COMMIT_HASH}" PATH="/tmp/git-bin:${PATH}" go generate
 RUN --mount=type=cache,id=nginx-ui-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=nginx-ui-go-build,target=/root/.cache/go-build \
     set -eux; \

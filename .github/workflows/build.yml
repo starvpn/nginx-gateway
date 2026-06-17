@@ -94,5 +94,6 @@ jobs:
             LUA_RESTY_WAF_REF=${{ env.LUA_RESTY_WAF_REF }}
             S6_OVERLAY_VERSION=${{ env.S6_OVERLAY_VERSION }}
             BUILD_TIME=${{ env.BUILD_TIME }}
+            COMMIT_HASH=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
