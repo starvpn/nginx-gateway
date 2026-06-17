@@ -30,7 +30,7 @@ permissions:
   contents: read
 
 env:
-  IMAGE_NAME: ${{ vars.DOCKERHUB_IMAGE || 'nginx-ui' }}
+  IMAGE_NAME: ${{ vars.DOCKERHUB_IMAGE || github.repository }}
   PLATFORMS: ${{ vars.DOCKER_PLATFORMS || 'linux/amd64,linux/arm64' }}
   GO_IMAGE: ${{ vars.GO_IMAGE || 'golang:1.26.2-bookworm' }}
   NODE_IMAGE: ${{ vars.NODE_IMAGE || 'node:current-bookworm' }}
@@ -46,14 +46,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
-      - name: Validate Docker Hub settings
-        if: github.event_name != 'pull_request'
-        run: |
-          if [ "${IMAGE_NAME}" = "nginx-ui" ]; then
-            echo "Set repository variable DOCKERHUB_IMAGE, for example: your-dockerhub-user/nginx-ui" >&2
-            exit 1
-          fi
 
       - name: Set build time
         run: echo "BUILD_TIME=$(date +%s)" >> "$GITHUB_ENV"
@@ -82,7 +74,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{raw}}
             type=sha,prefix=sha-
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/gateway' || startsWith(github.ref, 'refs/tags/v') }}
             type=raw,value=${{ inputs.image_tag }},enable=${{ github.event_name == 'workflow_dispatch' && inputs.image_tag != '' }}
 
       - name: Build and push Docker image
