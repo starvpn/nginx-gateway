@@ -2,17 +2,15 @@ package kernel
 
 import (
 	"context"
-	"errors"
+	"strings"
 
 	"github.com/0xJacky/Nginx-UI/model"
-	"github.com/0xJacky/Nginx-UI/query"
 	"github.com/0xJacky/Nginx-UI/settings"
 	"github.com/caarlos0/env/v11"
 	"github.com/google/uuid"
 	"github.com/uozi-tech/cosy/logger"
 	cSettings "github.com/uozi-tech/cosy/settings"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
 type predefinedUser struct {
@@ -60,24 +58,53 @@ func registerPredefinedUser(ctx context.Context) {
 		logger.Fatal(err)
 	}
 
-	u := query.User
+	name := strings.TrimSpace(pUser.Name)
+	password := strings.TrimSpace(pUser.Password)
+	if name == "" || password == "" {
+		return
+	}
 
-	_, err = u.First()
+	db := model.UseDB()
+	if db == nil {
+		logger.Error("registerPredefinedUser: database is not initialized")
+		return
+	}
 
-	// Only effect when there is no user in the database
-	if !errors.Is(err, gorm.ErrRecordNotFound) || pUser.Name == "" || pUser.Password == "" {
+	// Only initialize when no user has a password yet. InitUser creates a
+	// passwordless admin placeholder before this hook runs; that placeholder is
+	// still uninstalled and safe to initialize. Never overwrite a real user.
+	var initializedUsers int64
+	if err := db.Model(&model.User{}).Where("password <> ''").Count(&initializedUsers).Error; err != nil {
+		logger.Error(err)
+		return
+	}
+	if initializedUsers > 0 {
 		return
 	}
 
 	// Create a new user with the predefined name and password
-	pwd, _ := bcrypt.GenerateFromPassword([]byte(pUser.Password), bcrypt.DefaultCost)
-
-	_, err = u.Where(u.ID.Eq(1)).Updates(&model.User{
-		Name:     pUser.Name,
-		Password: string(pwd),
-	})
-
+	pwd, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
+		logger.Error(err)
+		return
+	}
+
+	predefined := &model.User{
+		Name:     name,
+		Password: string(pwd),
+		Status:   true,
+	}
+	result := db.Model(&model.User{}).Where("id = ?", 1).Updates(predefined)
+	if result.Error != nil {
+		logger.Error(result.Error)
+		return
+	}
+	if result.RowsAffected > 0 {
+		return
+	}
+
+	predefined.Model.ID = 1
+	if err := db.Create(predefined).Error; err != nil {
 		logger.Error(err)
 	}
 }
