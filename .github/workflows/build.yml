@@ -1,816 +1,106 @@
-name: Build
+name: Build Docker Image
 
 on:
   push:
-    branches-ignore:
-      - 'weblate'
-    paths:
-      - "app/**/*.js"
-      - "app/**/*.ts"
-      - "app/**/*.vue"
-      - "app/src/language/**/*.po"
-      - "app/i18n.json"
-      - "app/package.json"
-      - "app/.env*"
-      - "**/*.go"
-      - "go.mod"
-      - "go.sum"
-      - ".github/workflows/build*.yml"
-      - "resources/docker/**"
-      - "resources/development/*"
-      - "resources/demo/*"
-      - "Dockerfile"
-      - "demo.Dockerfile"
+    branches:
+      - gateway
+    tags:
+      - 'v*'
   pull_request:
-    types: [ opened, synchronize, reopened ]
     paths:
-      - "**/*.js"
-      - "**/*.vue"
-      - "app/package.json"
-      - "app/.env*"
-      - "**/*.go"
-      - "go.mod"
-      - "go.sum"
-      - ".github/workflows/*.yml"
-      - "resources/docker/**"
-      - "resources/development/*"
-      - "resources/demo/*"
-  release:
-    types:
-      - published
+      - '**/*.go'
+      - 'app/**'
+      - 'docs/package.json'
+      - 'go.mod'
+      - 'go.sum'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'resources/docker/**'
+      - '.github/docker/**'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Extra Docker tag to publish
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: ${{ vars.DOCKERHUB_IMAGE || 'nginx-ui' }}
+  PLATFORMS: ${{ vars.DOCKER_PLATFORMS || 'linux/amd64,linux/arm64' }}
+  GO_IMAGE: ${{ vars.GO_IMAGE || 'golang:1.26.2-bookworm' }}
+  NODE_IMAGE: ${{ vars.NODE_IMAGE || 'node:current-bookworm' }}
+  PNPM_VERSION: ${{ vars.PNPM_VERSION || '11.1.1' }}
+  OPENRESTY_IMAGE: ${{ vars.OPENRESTY_IMAGE || 'openresty/openresty:bookworm' }}
+  LUA_RESTY_WAF_REF: ${{ vars.LUA_RESTY_WAF_REF || '5e701b6' }}
+  S6_OVERLAY_VERSION: ${{ vars.S6_OVERLAY_VERSION || '3.2.1.0' }}
 
 jobs:
-  build_app:
-    runs-on: macos-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up nodejs
-        uses: actions/setup-node@v6
-        with:
-          node-version: current
-
-      - name: Install dependencies
-        run: |
-          corepack enable
-          corepack prepare pnpm@latest --activate
-          pnpm install
-
-      - name: Check frontend code style
-        run: |
-          pnpm lint
-
-      - name: Check frontend types
-        run: |
-          pnpm typecheck
-
-      - name: Build
-        run: |
-          npx update-browserslist-db@latest
-          pnpm build
-
-      - name: Archive app artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: app-dist
-          path: |
-            app/dist
-
-      - name: Prepare publish
-        if: github.event_name == 'release'
-        run: |
-          cp README*.md app/dist
-          find app/dist -printf '%P\n' | tar -C app/dist --no-recursion -zcvf app-dist.tar.gz -T -
-
-      - name: Publish
-        uses: softprops/action-gh-release@v3
-        if: github.event_name == 'release'
-        with:
-          files: app-dist.tar.gz
-
-  build:
+  docker:
+    name: Build and publish Docker image
     runs-on: ubuntu-latest
-    needs: build_app
-    strategy:
-      matrix:
-        goos: [ linux, windows ]
-        goarch: [ amd64, 386, arm64 ]
-        # exclude:
-          # Exclude i386 on windows (if needed)
-          # - goarch: 386
-          #   goos: windows
-        include:
-          # BEGIN Linux ARM 5 6 7
-          - goos: linux
-            goarch: arm
-            goarm: 7
-          - goos: linux
-            goarch: arm
-            goarm: 6
-          - goos: linux
-            goarch: arm
-            goarm: 5
-          # END Linux ARM 5 6 7
-          - goos: linux
-            goarch: riscv64
-          - goos: linux
-            goarch: loong64
-          # BEGIN MIPS
-          - goos: linux
-            goarch: mips64
-          - goos: linux
-            goarch: mips64le
-          - goos: linux
-            goarch: mipsle
-          - goos: linux
-            goarch: mips
-          # END MIPS
-    env:
-      CGO_ENABLED: 1
-      GOOS: ${{ matrix.goos }}
-      GOARCH: ${{ matrix.goarch }}
-      GOARM: ${{ matrix.goarm }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: ^1.26.2
-          cache: false
-
-      - name: Setup environment
-        id: info
+      - name: Validate Docker Hub settings
+        if: github.event_name != 'pull_request'
         run: |
-          export _NAME=$(jq ".$GOOS[\"$GOARCH$GOARM\"].name" -r < .github/build/build_info.json)
-          export _ARCH=$(jq ".$GOOS[\"$GOARCH$GOARM\"].arch" -r < .github/build/build_info.json)
-          export _ABI=$(jq ".$GOOS[\"$GOARCH$GOARM\"].abi // \"\"" -r < .github/build/build_info.json)
-          export _ARTIFACT=nginx-ui-$GOOS-$GOARCH$(if [[ "$GOARM" ]]; then echo "v$GOARM"; fi)
-          export _BINARY=nginx-ui$(if [[ "$GOOS" == "windows" ]]; then echo ".exe"; fi)
-          echo "GOOS: $GOOS, GOARCH: $GOARCH, GOARM: $GOARM, ABI: $_ABI, RELEASE_NAME: $_NAME, ARTIFACT_NAME: $_ARTIFACT, BINARY_NAME: $_BINARY"
-          echo "CACHE_NAME=$_NAME" >> $GITHUB_ENV
-          echo "ARCH_NAME=$_ARCH" >> $GITHUB_ENV
-          echo "ABI=$_ABI" >> $GITHUB_ENV
-          echo "DIST=nginx-ui-$_NAME" >> $GITHUB_ENV
-          echo "ARTIFACT=$_ARTIFACT" >> $GITHUB_ENV
-          echo "BINARY_NAME=$_BINARY" >> $GITHUB_ENV
-
-      - name: Setup Go modules cache
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/go/pkg/mod
-          key: go-${{ runner.os }}-${{ runner.arch }}-mod-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            go-${{ runner.os }}-${{ runner.arch }}-mod-
-
-      - name: Setup Go build cache
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cache/go-build
-          key: go-${{ runner.os }}-${{ runner.arch }}-${{ env.CACHE_NAME }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-              go-${{ runner.os }}-${{ runner.arch }}-${{ env.CACHE_NAME }}-
-
-      - name: Download app artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: app-dist
-          path: frontend-dist
-
-      - name: Prepare frontend assets
-        run: |
-          rm -rf app/dist
-          mkdir -p app
-          if [[ -d frontend-dist/app/dist ]]; then
-            mv frontend-dist/app/dist app/dist
-          elif [[ -d frontend-dist/dist ]]; then
-            mv frontend-dist/dist app/dist
-          else
-            mv frontend-dist app/dist
-          fi
-
-      - name: Generate files
-        env:
-          GOOS: linux
-          GOARCH: amd64
-        run: go generate cmd/version/generate.go
-
-      - name: Install musl cross compiler
-        if: env.GOOS == 'linux'
-        uses: nginxui/musl-cross-compilers@v1
-        id: musl
-        with:
-          target: ${{ env.ARCH_NAME }}-linux-musl${{ env.ABI }}
-          variant: ${{ env.GOARCH == 'loong64' && 'userdocs/qbt-musl-cross-make' || 'richfelker/musl-cross-make' }}
-
-      - name: Post install musl cross compiler
-        if: env.GOOS == 'linux'
-        run: |
-          echo "PATH=${{ steps.musl.outputs.path }}:$PATH" >> $GITHUB_ENV
-          echo "CC=${{ env.ARCH_NAME }}-linux-musl${{ env.ABI }}-gcc" >> $GITHUB_ENV
-          echo "CXX=${{ env.ARCH_NAME }}-linux-musl${{ env.ABI }}-g++" >> $GITHUB_ENV
-          echo "LD_FLAGS=-w --extldflags '-static'" >> $GITHUB_ENV
-
-      - name: Setup for Windows
-        if: env.GOOS == 'windows'
-        run: |
-          echo "LD_FLAGS=-w" >> $GITHUB_ENV
-          echo "CGO_ENABLED=1" >> $GITHUB_ENV
-
-          # Install cross compilers based on architecture
-          sudo apt-get update
-          sudo apt-get install -y zip
-          if [[ "$GOARCH" == "amd64" ]]; then
-            echo "Installing x86_64 Windows cross compiler"
-            sudo apt-get install -y gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
-            echo "CC=x86_64-w64-mingw32-gcc" >> $GITHUB_ENV
-            echo "CXX=x86_64-w64-mingw32-g++" >> $GITHUB_ENV
-          elif [[ "$GOARCH" == "386" ]]; then
-            echo "Installing i686 Windows cross compiler"
-            sudo apt-get install -y gcc-mingw-w64-i686 g++-mingw-w64-i686
-            echo "CC=i686-w64-mingw32-gcc" >> $GITHUB_ENV
-            echo "CXX=i686-w64-mingw32-g++" >> $GITHUB_ENV
-          elif [[ "$GOARCH" == "arm64" ]]; then
-            echo "Installing ARM64 Windows cross compiler"
-            # Ubuntu's apt repositories don't have mingw for ARM64
-            # Use llvm-mingw project instead
-            mkdir -p $HOME/llvm-mingw
-            wget -q https://github.com/mstorsjo/llvm-mingw/releases/download/20231128/llvm-mingw-20231128-ucrt-ubuntu-20.04-x86_64.tar.xz
-            tar xf llvm-mingw-20231128-ucrt-ubuntu-20.04-x86_64.tar.xz -C $HOME/llvm-mingw --strip-components=1
-            echo "PATH=$HOME/llvm-mingw/bin:$PATH" >> $GITHUB_ENV
-            echo "CC=aarch64-w64-mingw32-clang" >> $GITHUB_ENV
-            echo "CXX=aarch64-w64-mingw32-clang++" >> $GITHUB_ENV
-          else
-            echo "Unsupported Windows architecture: $GOARCH"
+          if [ "${IMAGE_NAME}" = "nginx-ui" ]; then
+            echo "Set repository variable DOCKERHUB_IMAGE, for example: your-dockerhub-user/nginx-ui" >&2
             exit 1
           fi
 
-      - name: Build
-        run: |
-          mkdir -p dist
-          go build -trimpath -tags=jsoniter -ldflags "$LD_FLAGS -X 'github.com/0xJacky/Nginx-UI/settings.buildTime=$(date +%s)'" -o dist/$BINARY_NAME -v main.go
-
-      - name: Archive backend artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.ARTIFACT }}
-          path: dist/${{ env.BINARY_NAME }}
-
-      - name: Prepare publish
-        run: |
-          cp README*.md ./dist
-          find dist -printf '%P\n' | tar -C dist --no-recursion -zcvf ${{ env.DIST }}.tar.gz -T -
-          openssl dgst -sha512 ${{ env.DIST }}.tar.gz | sed 's/([^)]*)//g' | awk '{print $NF}' >> ${{ env.DIST }}.tar.gz.digest
-
-          # Create zip for Windows builds (for winget compatibility)
-          if [[ "$GOOS" == "windows" ]]; then
-            cd dist
-            zip -r ../${{ env.DIST }}.zip .
-            cd ..
-            openssl dgst -sha512 ${{ env.DIST }}.zip | sed 's/([^)]*)//g' | awk '{print $NF}' >> ${{ env.DIST }}.zip.digest
-          fi
-
-      - name: Publish
-        uses: softprops/action-gh-release@v3
-        if: github.event_name == 'release'
-        with:
-          files: |
-            ${{ env.DIST }}.tar.gz
-            ${{ env.DIST }}.tar.gz.digest
-            ${{ env.GOOS == 'windows' && format('{0}.zip', env.DIST) || '' }}
-            ${{ env.GOOS == 'windows' && format('{0}.zip.digest', env.DIST) || '' }}
-
-      - name: Upload to R2 using S3 API
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/dev'
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1
-        run: |
-          echo "Uploading ${{ env.DIST }}.tar.gz to R2..."
-          aws s3 cp ./${{ env.DIST }}.tar.gz s3://nginx-ui-dev-build/${{ env.DIST }}.tar.gz --endpoint-url=${{ secrets.R2_S3_API_ENDPOINT }}
-
-          echo "Uploading ${{ env.DIST }}.tar.gz.digest to R2..."
-          aws s3 cp ./${{ env.DIST }}.tar.gz.digest s3://nginx-ui-dev-build/${{ env.DIST }}.tar.gz.digest --endpoint-url=${{ secrets.R2_S3_API_ENDPOINT }}
-
-          echo "Upload completed successfully"
-
-  build_termux:
-    runs-on: ubuntu-latest
-    needs: build_app
-    env:
-      CGO_ENABLED: 1
-      GOOS: android
-      GOARCH: arm64
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: ^1.26.2
-          cache: false
-
-      - name: Setup environment
-        id: info_termux
-        run: |
-          export _NAME=$(jq ".termux[\"$GOARCH\"].name" -r < .github/build/build_info.json)
-          export _ARTIFACT=nginx-ui-$_NAME
-          export _BINARY=nginx-ui
-          echo "GOOS: $GOOS, GOARCH: $GOARCH, RELEASE_NAME: $_NAME, ARTIFACT_NAME: $_ARTIFACT, BINARY_NAME: $_BINARY"
-          echo "CACHE_NAME=$_NAME" >> $GITHUB_ENV
-          echo "DIST=nginx-ui-$_NAME" >> $GITHUB_ENV
-          echo "ARTIFACT=$_ARTIFACT" >> $GITHUB_ENV
-          echo "BINARY_NAME=$_BINARY" >> $GITHUB_ENV
-
-      - name: Setup Go modules cache
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/go/pkg/mod
-          key: go-${{ runner.os }}-${{ runner.arch }}-mod-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            go-${{ runner.os }}-${{ runner.arch }}-mod-
-
-      - name: Setup Go build cache
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cache/go-build
-          key: go-${{ runner.os }}-${{ runner.arch }}-${{ env.CACHE_NAME }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-              go-${{ runner.os }}-${{ runner.arch }}-${{ env.CACHE_NAME }}-
-
-      - name: Download app artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: app-dist
-          path: frontend-dist
-
-      - name: Prepare frontend assets
-        run: |
-          rm -rf app/dist
-          mkdir -p app
-          if [[ -d frontend-dist/app/dist ]]; then
-            mv frontend-dist/app/dist app/dist
-          elif [[ -d frontend-dist/dist ]]; then
-            mv frontend-dist/dist app/dist
-          else
-            mv frontend-dist app/dist
-          fi
-
-      - name: Generate files
-        env:
-          GOOS: linux
-          GOARCH: amd64
-        run: go generate cmd/version/generate.go
-
-      - name: Set up Android NDK
-        id: ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r27c
-
-      - name: Configure Android toolchain
-        run: |
-          API_LEVEL=24
-          TOOLCHAIN="${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin"
-          echo "PATH=$TOOLCHAIN:$PATH" >> $GITHUB_ENV
-          echo "ANDROID_API_LEVEL=$API_LEVEL" >> $GITHUB_ENV
-          echo "CC=aarch64-linux-android${API_LEVEL}-clang" >> $GITHUB_ENV
-          echo "CXX=aarch64-linux-android${API_LEVEL}-clang++" >> $GITHUB_ENV
-          echo "LD_FLAGS=-w" >> $GITHUB_ENV
-          echo "GOOS=android" >> $GITHUB_ENV
-          echo "GOARCH=arm64" >> $GITHUB_ENV
-          echo "CGO_ENABLED=1" >> $GITHUB_ENV
-
-      - name: Build
-        env:
-          GOOS: android
-          GOARCH: arm64
-          CGO_ENABLED: 1
-        run: |
-          mkdir -p dist
-          go build -trimpath -tags=jsoniter -ldflags "$LD_FLAGS -X 'github.com/0xJacky/Nginx-UI/settings.buildTime=$(date +%s)'" -o dist/$BINARY_NAME -v main.go
-
-      - name: Archive backend artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.ARTIFACT }}
-          path: dist/${{ env.BINARY_NAME }}
-
-      - name: Prepare publish
-        run: |
-          cp README*.md ./dist
-          find dist -printf '%P\n' | tar -C dist --no-recursion -zcvf ${{ env.DIST }}.tar.gz -T -
-          openssl dgst -sha512 ${{ env.DIST }}.tar.gz | sed 's/([^)]*)//g' | awk '{print $NF}' >> ${{ env.DIST }}.tar.gz.digest
-
-      - name: Publish
-        uses: softprops/action-gh-release@v3
-        if: github.event_name == 'release'
-        with:
-          files: |
-            ${{ env.DIST }}.tar.gz
-            ${{ env.DIST }}.tar.gz.digest
-
-      - name: Upload to R2 using S3 API
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/dev'
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1
-        run: |
-          echo "Uploading ${{ env.DIST }}.tar.gz to R2..."
-          aws s3 cp ./${{ env.DIST }}.tar.gz s3://nginx-ui-dev-build/${{ env.DIST }}.tar.gz --endpoint-url=${{ secrets.R2_S3_API_ENDPOINT }}
-
-          echo "Uploading ${{ env.DIST }}.tar.gz.digest to R2..."
-          aws s3 cp ./${{ env.DIST }}.tar.gz.digest s3://nginx-ui-dev-build/${{ env.DIST }}.tar.gz.digest --endpoint-url=${{ secrets.R2_S3_API_ENDPOINT }}
-
-          echo "Upload completed successfully"
-
-  build_macos_native:
-    runs-on: macos-latest
-    needs: build_app
-    strategy:
-      matrix:
-        goarch: [amd64, arm64]
-    env:
-      CGO_ENABLED: 1
-      GOOS: darwin
-      GOARCH: ${{ matrix.goarch }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: ^1.26.2
-          cache: false
-
-      - name: Setup environment
-        id: info
-        run: |
-          export _NAME=$(jq ".darwin[\"$GOARCH\"].name" -r < .github/build/build_info.json)
-          export _ARTIFACT=nginx-ui-darwin-$GOARCH
-          export _BINARY=nginx-ui
-          echo "GOOS: darwin, GOARCH: $GOARCH, RELEASE_NAME: $_NAME, ARTIFACT_NAME: $_ARTIFACT, BINARY_NAME: $_BINARY"
-          echo "CACHE_NAME=$_NAME" >> $GITHUB_ENV
-          echo "DIST=nginx-ui-$_NAME" >> $GITHUB_ENV
-          echo "ARTIFACT=$_ARTIFACT" >> $GITHUB_ENV
-          echo "BINARY_NAME=$_BINARY" >> $GITHUB_ENV
-
-      - name: Setup Go build cache
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: go-${{ runner.os }}-${{ runner.arch }}-${{ env.CACHE_NAME }}-${{ hashFiles('go.sum') }}
-          restore-keys: |
-            go-${{ runner.os }}-${{ runner.arch }}-${{ env.CACHE_NAME }}-
-
-      - name: Download app artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: app-dist
-          path: frontend-dist
-
-      - name: Prepare frontend assets
-        run: |
-          rm -rf app/dist
-          mkdir -p app
-          if [[ -d frontend-dist/app/dist ]]; then
-            mv frontend-dist/app/dist app/dist
-          elif [[ -d frontend-dist/dist ]]; then
-            mv frontend-dist/dist app/dist
-          else
-            mv frontend-dist app/dist
-          fi
-
-      - name: Generate files
-        run: go generate cmd/version/generate.go
-
-      - name: Build with native CGO
-        run: |
-          mkdir -p dist
-          go build -trimpath -tags=jsoniter -ldflags "-w -X 'github.com/0xJacky/Nginx-UI/settings.buildTime=$(date +%s)'" -o dist/$BINARY_NAME -v main.go
-
-      - name: Archive backend artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.ARTIFACT }}
-          path: dist/${{ env.BINARY_NAME }}
-
-      - name: Prepare publish
-        run: |
-          cp README*.md ./dist
-          cd dist && tar -zcvf ../${{ env.DIST }}.tar.gz .
-          cd ..
-          openssl dgst -sha512 ${{ env.DIST }}.tar.gz | sed 's/([^)]*)//g' | awk '{print $NF}' >> ${{ env.DIST }}.tar.gz.digest
-
-      - name: Publish
-        uses: softprops/action-gh-release@v3
-        if: github.event_name == 'release'
-        with:
-          files: |
-            ${{ env.DIST }}.tar.gz
-            ${{ env.DIST }}.tar.gz.digest
-
-      - name: Upload to R2 using S3 API
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/dev'
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1
-        run: |
-          echo "Uploading ${{ env.DIST }}.tar.gz to R2..."
-          aws s3 cp ./${{ env.DIST }}.tar.gz s3://nginx-ui-dev-build/${{ env.DIST }}.tar.gz --endpoint-url=${{ secrets.R2_S3_API_ENDPOINT }}
-
-          echo "Uploading ${{ env.DIST }}.tar.gz.digest to R2..."
-          aws s3 cp ./${{ env.DIST }}.tar.gz.digest s3://nginx-ui-dev-build/${{ env.DIST }}.tar.gz.digest --endpoint-url=${{ secrets.R2_S3_API_ENDPOINT }}
-
-          echo "Upload completed successfully"
-
-  docker-build:
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    needs: [build, build_macos_native]
-    env:
-      # The bundled runtime now uses openresty/openresty:bookworm, whose
-      # published Docker manifests currently cover amd64 and arm64. Keep
-      # binary releases broad, but limit Docker images to supported bases
-      # unless we add a source-built OpenResty stage for the other arches.
-      PLATFORMS: linux/amd64,linux/arm64
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: |
-            uozi/nginx-ui
-          tags: |
-            type=schedule
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{raw}}
-            type=sha
-            type=raw,value=latest,enable=${{ github.event_name == 'release' && !github.event.release.prerelease }}
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: ./dist
-
-      - name: Prepare Artifacts
-        run: chmod +x ./dist/nginx-ui-*/nginx-ui*
+      - name: Set build time
+        run: echo "BUILD_TIME=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
-        with:
-          platforms: arm,arm64,riscv64
 
       - name: Set up Docker Buildx
-        id: buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Login to DockerHub
+      - name: Login to Docker Hub
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
-          username: ${{ secrets.DOCKERHUB_USER }}
+          username: ${{ secrets.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Prepare Dockerfile
-        run: |
-          cp ./Dockerfile ./dist
-          cp -rp ./resources ./dist
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{raw}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=${{ inputs.image_tag }},enable=${{ github.event_name == 'workflow_dispatch' && inputs.image_tag != '' }}
 
-      - name: Build and push
+      - name: Build and push Docker image
         uses: docker/build-push-action@v7
         with:
-          context: ./dist
-          file: ./dist/Dockerfile
+          context: .
+          file: .github/docker/Dockerfile
           platforms: ${{ env.PLATFORMS }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
-      - name: Prepare Demo Dockerfile
-        run: |
-          cp ./demo.Dockerfile ./dist
-          cp -rp ./resources ./dist
-
-      - name: Build and push demo
-        uses: docker/build-push-action@v7
-        if: github.ref == 'refs/heads/dev'
-        with:
-          context: ./dist
-          file: ./dist/demo.Dockerfile
-          platforms: ${{ env.PLATFORMS }}
-          push: 'true'
-          tags: |
-            uozi/nginx-ui-demo:latest
-
-  update-homebrew:
-    runs-on: ubuntu-latest
-    needs: [build, build_macos_native]
-    if: github.event_name == 'release'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Get release info
-        id: release
-        run: |
-          echo "tag_name=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
-          echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
-      - name: Download release assets and calculate SHA256 checksums
-        id: checksums
-        run: |
-          VERSION="${{ steps.release.outputs.version }}"
-          TAG_NAME="${{ steps.release.outputs.tag_name }}"
-
-          # Download binary files from releases and calculate SHA256
-          mkdir -p downloads
-
-          # macOS Intel
-          wget -O downloads/nginx-ui-macos-64.tar.gz "https://github.com/${{ github.repository }}/releases/download/$TAG_NAME/nginx-ui-macos-64.tar.gz"
-          MACOS_INTEL_SHA256=$(sha256sum downloads/nginx-ui-macos-64.tar.gz | cut -d' ' -f1)
-
-          # macOS ARM
-          wget -O downloads/nginx-ui-macos-arm64-v8a.tar.gz "https://github.com/${{ github.repository }}/releases/download/$TAG_NAME/nginx-ui-macos-arm64-v8a.tar.gz"
-          MACOS_ARM_SHA256=$(sha256sum downloads/nginx-ui-macos-arm64-v8a.tar.gz | cut -d' ' -f1)
-
-          # Linux Intel
-          wget -O downloads/nginx-ui-linux-64.tar.gz "https://github.com/${{ github.repository }}/releases/download/$TAG_NAME/nginx-ui-linux-64.tar.gz"
-          LINUX_INTEL_SHA256=$(sha256sum downloads/nginx-ui-linux-64.tar.gz | cut -d' ' -f1)
-
-          # Linux ARM
-          wget -O downloads/nginx-ui-linux-arm64-v8a.tar.gz "https://github.com/${{ github.repository }}/releases/download/$TAG_NAME/nginx-ui-linux-arm64-v8a.tar.gz"
-          LINUX_ARM_SHA256=$(sha256sum downloads/nginx-ui-linux-arm64-v8a.tar.gz | cut -d' ' -f1)
-
-          echo "macos_intel_sha256=$MACOS_INTEL_SHA256" >> $GITHUB_OUTPUT
-          echo "macos_arm_sha256=$MACOS_ARM_SHA256" >> $GITHUB_OUTPUT
-          echo "linux_intel_sha256=$LINUX_INTEL_SHA256" >> $GITHUB_OUTPUT
-          echo "linux_arm_sha256=$LINUX_ARM_SHA256" >> $GITHUB_OUTPUT
-
-      - name: Generate Homebrew Formula
-        id: formula
-        run: |
-          VERSION="${{ steps.release.outputs.version }}"
-
-          cat > nginx-ui.rb << 'EOF'
-          class NginxUi < Formula
-            desc     "Yet another Nginx Web UI"
-            homepage "https://github.com/0xJacky/nginx-ui"
-            version  "${{ steps.release.outputs.version }}"
-            license  "AGPL-3.0"
-
-            on_macos do
-              on_intel do
-                url     "https://github.com/0xJacky/nginx-ui/releases/download/v#{version}/nginx-ui-macos-64.tar.gz"
-                sha256  "${{ steps.checksums.outputs.macos_intel_sha256 }}"
-              end
-              on_arm do
-                url     "https://github.com/0xJacky/nginx-ui/releases/download/v#{version}/nginx-ui-macos-arm64-v8a.tar.gz"
-                sha256  "${{ steps.checksums.outputs.macos_arm_sha256 }}"
-              end
-            end
-
-            on_linux do
-              on_intel do
-                url     "https://github.com/0xJacky/nginx-ui/releases/download/v#{version}/nginx-ui-linux-64.tar.gz"
-                sha256  "${{ steps.checksums.outputs.linux_intel_sha256 }}"
-              end
-              on_arm do
-                url     "https://github.com/0xJacky/nginx-ui/releases/download/v#{version}/nginx-ui-linux-arm64-v8a.tar.gz"
-                sha256  "${{ steps.checksums.outputs.linux_arm_sha256 }}"
-              end
-            end
-
-            def install
-              bin.install "nginx-ui"
-
-              # Create configuration directory
-              (etc/"nginx-ui").mkpath
-
-              # Create default configuration file if it doesn't exist
-              config_file = etc/"nginx-ui/app.ini"
-              unless config_file.exist?
-                config_file.write <<~EOS
-                  [app]
-                  PageSize = 10
-
-                  [server]
-                  Host = 0.0.0.0
-                  Port = 9000
-                  RunMode = release
-
-                  [cert]
-                  HTTPChallengePort = 9180
-
-                  [terminal]
-                  StartCmd = login
-                EOS
-              end
-
-              # Create data directory
-              (var/"nginx-ui").mkpath
-            end
-
-            def post_install
-              # Ensure correct permissions
-              (var/"nginx-ui").chmod 0755
-            end
-
-            service do
-              run [opt_bin/"nginx-ui", "serve", "--config", etc/"nginx-ui/app.ini"]
-              keep_alive true
-              working_dir var/"nginx-ui"
-              log_path var/"log/nginx-ui.log"
-              error_log_path var/"log/nginx-ui.err.log"
-            end
-
-            test do
-              assert_match version.to_s, shell_output("#{bin}/nginx-ui --version")
-            end
-          end
-          EOF
-
-          echo "Generated Homebrew Formula:"
-          cat nginx-ui.rb
-
-      - name: Checkout homebrew-tools repository
-        uses: actions/checkout@v6
-        with:
-          repository: 0xJacky/homebrew-tools
-          path: homebrew-tools
-          token: ${{ secrets.HOMEBREW_GITHUB_TOKEN }}
-
-      - name: Update Formula file
-        run: |
-          # Copy the generated formula to the correct location
-          mkdir -p homebrew-tools/Formula/
-          cp nginx-ui.rb homebrew-tools/Formula/nginx-ui.rb
-
-      - name: Verify Formula
-        run: |
-          cd homebrew-tools
-          # Basic syntax check
-          ruby -c Formula/nginx-ui.rb
-          echo "Formula syntax is valid"
-
-      - name: Create Pull Request to homebrew-tools
-        uses: peter-evans/create-pull-request@v8
-        with:
-          token: ${{ secrets.HOMEBREW_GITHUB_TOKEN }}
-          path: homebrew-tools
-          branch: update-nginx-ui-${{ steps.release.outputs.version }}
-          delete-branch: true
-          title: 'nginx-ui ${{ steps.release.outputs.version }}'
-          body: |
-            Update nginx-ui to version ${{ steps.release.outputs.version }}
-
-            **Release Notes:**
-            - Version: ${{ steps.release.outputs.version }}
-            - Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.release.outputs.tag_name }}
-
-            **Checksums (SHA256):**
-            - macOS Intel: ${{ steps.checksums.outputs.macos_intel_sha256 }}
-            - macOS ARM: ${{ steps.checksums.outputs.macos_arm_sha256 }}
-            - Linux Intel: ${{ steps.checksums.outputs.linux_intel_sha256 }}
-            - Linux ARM: ${{ steps.checksums.outputs.linux_arm_sha256 }}
-
-            ---
-
-            This PR was automatically generated by GitHub Actions.
-          commit-message: 'nginx-ui ${{ steps.release.outputs.version }}'
-          committer: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
-          author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
-          add-paths: |
-            Formula/nginx-ui.rb
-
-  publish-winget:
-    runs-on: windows-latest
-    needs: [build, build_macos_native]
-    if: github.event_name == 'release'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Publish to WinGet
-        uses: vedantmgoyal9/winget-releaser@v2
-        with:
-          identifier: 0xJacky.nginx-ui
-          max-versions-to-keep: 5
-          token: ${{ secrets.HOMEBREW_GITHUB_TOKEN }}
-          installers-regex: 'nginx-ui-windows.*\.zip$'
+          build-args: |
+            GO_IMAGE=${{ env.GO_IMAGE }}
+            NODE_IMAGE=${{ env.NODE_IMAGE }}
+            PNPM_VERSION=${{ env.PNPM_VERSION }}
+            OPENRESTY_IMAGE=${{ env.OPENRESTY_IMAGE }}
+            LUA_RESTY_WAF_REF=${{ env.LUA_RESTY_WAF_REF }}
+            S6_OVERLAY_VERSION=${{ env.S6_OVERLAY_VERSION }}
+            BUILD_TIME=${{ env.BUILD_TIME }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
