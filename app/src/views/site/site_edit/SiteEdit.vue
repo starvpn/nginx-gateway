@@ -79,8 +79,9 @@ async function handleModeChange(checked: CheckedType) {
 }
 
 function handleConfigContentUpdate(value: string) {
+  const changedByEditor = value !== configText.value
   configText.value = value
-  if (activeKey.value === 'config')
+  if (activeKey.value === 'config' && changedByEditor)
     configFileTouched.value = true
 }
 </script>

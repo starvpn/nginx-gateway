@@ -1,17 +1,21 @@
 <script setup lang="ts">
 import type { Cert, CertificateInfo } from '@/api/cert'
 import type { NgxDirective, NgxServer } from '@/api/ngx'
+import acme_user from '@/api/acme_user'
+import cert from '@/api/cert'
 import CertInfo from '@/components/CertInfo/CertInfo.vue'
-import ChangeCert from '@/views/site/site_edit/components/Cert/ChangeCert.vue'
+import { AutoCertState } from '@/constants'
 import IssueCert from '@/views/site/site_edit/components/Cert/IssueCert.vue'
 import SelfSignedCert from '@/views/site/site_edit/components/Cert/SelfSignedCert.vue'
 import { useServerDirectives } from '@/views/site/site_edit/composables/useServerDirectives'
+import dayjs from 'dayjs'
 import { useSiteEditorStore } from '../SiteEditor/store'
 
 type HttpMode = 'keep' | 'redirect' | 'disabled'
+type SSLOption = 'existing' | 'manual'
 
 const editorStore = useSiteEditorStore()
-const { name, ngxConfig, curServerIdx, curServerDirectives, curDirectivesMap, certInfoMap } = storeToRefs(editorStore)
+const { name, ngxConfig, curServerIdx, curDirectivesMap, certInfoMap } = storeToRefs(editorStore)
 
 const {
   findDirective,
@@ -22,7 +26,13 @@ const {
   getListenPort,
 } = useServerDirectives()
 
-const changedCerts = ref<Cert[]>([])
+const router = useRouter()
+const sslOption = ref<SSLOption>('existing')
+const certificates = ref<Cert[]>([])
+const certificatesLoading = ref(false)
+const acmeUsers = ref<{ id: number, name: string, email: string }[]>([])
+const acmeUsersLoading = ref(false)
+const selectedAcmeUserID = ref<number>()
 
 function cloneServer(server: NgxServer): NgxServer {
   return JSON.parse(JSON.stringify(server))
@@ -66,6 +76,207 @@ function getServerDirectives(server?: NgxServer) {
     server.directives = []
 
   return server.directives
+}
+
+async function loadCertificates() {
+  certificatesLoading.value = true
+  try {
+    const result: Cert[] = []
+    let page = 1
+
+    while (true) {
+      const response = await cert.getList({ page })
+      result.push(...response.data)
+
+      const perPage = response.pagination?.per_page
+      if (!perPage || response.data.length < perPage)
+        break
+
+      page++
+    }
+
+    certificates.value = result
+  }
+  finally {
+    certificatesLoading.value = false
+  }
+}
+
+async function loadAcmeUsers() {
+  acmeUsersLoading.value = true
+  try {
+    const result: { id: number, name: string, email: string }[] = []
+    let page = 1
+
+    while (true) {
+      const response = await acme_user.getList({ page })
+      result.push(...response.data)
+
+      const perPage = response.pagination?.per_page
+      if (!perPage || response.data.length < perPage)
+        break
+
+      page++
+    }
+
+    acmeUsers.value = result
+  }
+  finally {
+    acmeUsersLoading.value = false
+  }
+}
+
+function getCertificateDomains(certificate: Cert) {
+  return certificate.domains?.length ? certificate.domains : [certificate.name].filter(Boolean)
+}
+
+function getServerNames(server?: NgxServer) {
+  return server?.directives
+    ?.find(item => item.directive === 'server_name')
+    ?.params
+    ?.split(/\s+/)
+    .map(item => item.trim())
+    .filter(item => item && item !== '_') ?? []
+}
+
+function getCertificateMatchScore(certificate: Cert) {
+  const names = getServerNames(getTLSServer() ?? getHTTPServer())
+  const domains = getCertificateDomains(certificate)
+  let score = 0
+
+  for (const name of names) {
+    for (const domain of domains) {
+      if (domain === name) {
+        score = Math.max(score, 3)
+        continue
+      }
+
+      if (!domain.startsWith('*.'))
+        continue
+
+      const suffix = domain.slice(1)
+      const base = domain.slice(2)
+      if (name.endsWith(suffix) && name.split('.').length === base.split('.').length + 1)
+        score = Math.max(score, 2)
+    }
+  }
+
+  return score
+}
+
+function getCertificateSearchText(certificate: Cert) {
+  return [
+    certificate.name,
+    ...getCertificateDomains(certificate),
+    certificate.certificate_info?.issuer_name,
+    certificate.certificate_info?.not_after,
+  ].filter(Boolean).join(' ')
+}
+
+function filterCertificateOption(input: string, option?: unknown) {
+  const label = (option as { label?: string })?.label ?? ''
+  return label.toLowerCase().includes(input.toLowerCase())
+}
+
+function getCertificateTypeText(certificate: Cert) {
+  if (certificate.auto_cert === AutoCertState.Enable)
+    return $gettext('Managed Certificate')
+  if (certificate.auto_cert === AutoCertState.Sync)
+    return $gettext('Sync Certificate')
+  if (certificate.auto_cert === AutoCertState.SelfSigned)
+    return $gettext('Self-signed Certificate')
+  return $gettext('General Certificate')
+}
+
+function getCertificateTypeColor(certificate: Cert) {
+  if (certificate.auto_cert === AutoCertState.Enable)
+    return 'processing'
+  if (certificate.auto_cert === AutoCertState.Sync)
+    return 'success'
+  if (certificate.auto_cert === AutoCertState.SelfSigned)
+    return 'cyan'
+  return 'purple'
+}
+
+function getCertificateIssuerText(certificate: Cert) {
+  const issuer = certificate.certificate_info?.issuer_name
+  if (!issuer)
+    return getCertificateTypeText(certificate)
+
+  if (issuer.includes("Let's Encrypt"))
+    return "Let's Encrypt"
+
+  return issuer
+}
+
+function getCertificateExpiry(certificate: Cert) {
+  const date = certificate.certificate_info?.not_after
+  return date ? dayjs(date).format('YYYY-MM-DD') : '-'
+}
+
+function getCertificateExpiryValue(certificate: Cert) {
+  const date = certificate.certificate_info?.not_after
+  return date ? dayjs(date).valueOf() : 0
+}
+
+function getCurrentCertificatePaths() {
+  const directives = getServerDirectives(getTLSServer())
+  return {
+    certificate: findDirective('ssl_certificate', directives)?.params,
+    key: findDirective('ssl_certificate_key', directives)?.params,
+  }
+}
+
+function getCurrentCertificateID() {
+  const paths = getCurrentCertificatePaths()
+  return certificates.value.find(certificate => {
+    return certificate.ssl_certificate_path === paths.certificate
+      && certificate.ssl_certificate_key_path === paths.key
+  })?.id
+}
+
+function applyCertificate(certificate: Cert) {
+  const server = ensureTLSServer()
+  const directives = getServerDirectives(server)
+  removeDirective('ssl_certificate', directives)
+  removeDirective('ssl_certificate_key', directives)
+
+  const serverNameIndex = directives.findIndex(item => item.directive === 'server_name')
+  const insertIndex = serverNameIndex >= 0 ? serverNameIndex + 1 : directives.length
+  directives.splice(insertIndex, 0,
+    { directive: 'ssl_certificate', params: certificate.ssl_certificate_path },
+    { directive: 'ssl_certificate_key', params: certificate.ssl_certificate_key_path },
+  )
+
+  selectedAcmeUserID.value = certificate.acme_user_id || undefined
+}
+
+function clearCertificate() {
+  const directives = getServerDirectives(getTLSServer())
+  removeDirective('ssl_certificate', directives)
+  removeDirective('ssl_certificate_key', directives)
+}
+
+function findBestCertificate() {
+  return certificates.value
+    .filter(certificate => certificate.ssl_certificate_path && certificate.ssl_certificate_key_path)
+    .map(certificate => ({ certificate, score: getCertificateMatchScore(certificate) }))
+    .filter(item => item.score > 0)
+    .sort((a, b) => {
+      if (a.score !== b.score)
+        return b.score - a.score
+
+      return getCertificateExpiryValue(b.certificate) - getCertificateExpiryValue(a.certificate)
+    })[0]?.certificate
+}
+
+function applyBestCertificateIfNeeded() {
+  if (getCurrentCertificatePaths().certificate)
+    return
+
+  const certificate = findBestCertificate()
+  if (certificate)
+    applyCertificate(certificate)
 }
 
 function syncActiveTLSServer() {
@@ -126,8 +337,6 @@ function removeHTTPSConfig() {
 
   if (curServerIdx.value >= (ngxConfig.value.servers?.length ?? 0))
     curServerIdx.value = 0
-
-  changedCerts.value = []
 }
 
 function setTLSListen(port: string) {
@@ -161,6 +370,7 @@ const httpsEnabled = computed({
     if (value) {
       ensureTLSServer()
       tlsProtocols.value = ['TLSv1.3', 'TLSv1.2']
+      applyBestCertificateIfNeeded()
       return
     }
     removeHTTPSConfig()
@@ -219,9 +429,60 @@ const httpMode = computed<HttpMode>({
   },
 })
 
+const selectedCertificateID = computed<number | undefined>({
+  get() {
+    return getCurrentCertificateID()
+  },
+  set(value) {
+    if (!value) {
+      clearCertificate()
+      return
+    }
+
+    const certificate = certificates.value.find(item => item.id === value)
+    if (certificate)
+      applyCertificate(certificate)
+  },
+})
+
+const selectedCertificate = computed(() => {
+  const id = selectedCertificateID.value
+  return certificates.value.find(certificate => certificate.id === id)
+})
+
+const acmeUserOptions = computed(() => acmeUsers.value.map(user => ({
+  label: user.name || user.email,
+  value: user.id,
+})))
+
+const certificateOptions = computed(() => {
+  return certificates.value
+    .filter(certificate => certificate.ssl_certificate_path && certificate.ssl_certificate_key_path)
+    .filter(certificate => {
+      if (!selectedAcmeUserID.value)
+        return true
+
+      return certificate.acme_user_id === selectedAcmeUserID.value || certificate.id === selectedCertificateID.value
+    })
+    .sort((a, b) => {
+      const score = getCertificateMatchScore(b) - getCertificateMatchScore(a)
+      if (score !== 0)
+        return score
+
+      return getCertificateExpiryValue(b) - getCertificateExpiryValue(a)
+    })
+})
+
 const currentCertInfo = computed<CertificateInfo[]>(() => {
   const tlsIndex = getTLSServerIndex()
   return tlsIndex >= 0 ? certInfoMap.value?.[tlsIndex] ?? [] : []
+})
+
+const certificateInfoCards = computed<CertificateInfo[]>(() => {
+  if (selectedCertificate.value?.certificate_info)
+    return [selectedCertificate.value.certificate_info]
+
+  return currentCertInfo.value
 })
 
 const noServerName = computed(() => !curDirectivesMap.value.server_name?.length)
@@ -319,24 +580,20 @@ const sslCiphers = computed({
   },
 })
 
-function handleCertChange(certs: Cert[]) {
-  ensureTLSServer()
-  changedCerts.value = certs
-  const directives = getServerDirectives(getTLSServer())
-    .filter(item => item.directive !== 'ssl_certificate' && item.directive !== 'ssl_certificate_key')
-
-  certs.forEach(cert => {
-    directives.push({ directive: 'ssl_certificate', params: cert.ssl_certificate_path })
-    directives.push({ directive: 'ssl_certificate_key', params: cert.ssl_certificate_key_path })
-  })
-
-  curServerDirectives.value = directives
-}
-
 watch(httpsEnabled, enabled => {
   if (enabled)
     syncActiveTLSServer()
 }, { immediate: true })
+
+watch(certificates, () => {
+  if (httpsEnabled.value)
+    applyBestCertificateIfNeeded()
+})
+
+onMounted(() => {
+  loadCertificates()
+  loadAcmeUsers()
+})
 </script>
 
 <template>
@@ -384,28 +641,94 @@ watch(httpsEnabled, enabled => {
           :message="$gettext('server_name is required before applying an ACME certificate.')"
         />
 
-        <ARow v-if="currentCertInfo.length" :gutter="[16, 16]" class="mb-4">
-          <ACol v-for="(certInfo, index) in currentCertInfo" :key="index" :xs="24" :lg="12">
+        <AFormItem :label="$gettext('SSL Option')" required>
+          <ASelect v-model:value="sslOption" class="max-w-420px">
+            <ASelectOption value="existing">
+              {{ $gettext('Use existing certificate') }}
+            </ASelectOption>
+            <ASelectOption value="manual">
+              {{ $gettext('Import certificate manually') }}
+            </ASelectOption>
+          </ASelect>
+        </AFormItem>
+
+        <template v-if="sslOption === 'existing'">
+          <AFormItem :label="$gettext('ACME User')">
+            <ASelect
+              v-model:value="selectedAcmeUserID"
+              class="max-w-420px"
+              allow-clear
+              show-search
+              :placeholder="$gettext('All ACME users')"
+              :loading="acmeUsersLoading"
+              :options="acmeUserOptions"
+            />
+          </AFormItem>
+
+          <AFormItem :label="$gettext('Certificate')" required>
+            <ASelect
+              v-model:value="selectedCertificateID"
+              class="max-w-620px"
+              allow-clear
+              show-search
+              option-label-prop="label"
+              :placeholder="$gettext('Select an existing certificate')"
+              :loading="certificatesLoading"
+              :filter-option="filterCertificateOption"
+            >
+              <ASelectOption
+                v-for="certificate in certificateOptions"
+                :key="certificate.id"
+                :value="certificate.id"
+                :label="getCertificateSearchText(certificate)"
+              >
+                <div class="certificate-option">
+                  <div class="certificate-option__name">
+                    {{ getCertificateDomains(certificate).join(', ') }}
+                  </div>
+                  <ATag :color="getCertificateTypeColor(certificate)">
+                    {{ getCertificateIssuerText(certificate) }}
+                  </ATag>
+                  <ATag color="blue">
+                    {{ getCertificateExpiry(certificate) }}
+                  </ATag>
+                </div>
+              </ASelectOption>
+            </ASelect>
+            <div class="certificate-actions">
+              <AButton size="small" type="link" :loading="certificatesLoading" @click="loadCertificates">
+                {{ $gettext('Refresh') }}
+              </AButton>
+              <AButton size="small" type="link" @click="router.push('/certificates/import')">
+                {{ $gettext('Import Certificate') }}
+              </AButton>
+            </div>
+          </AFormItem>
+        </template>
+
+        <template v-else>
+          <AAlert
+            type="info"
+            show-icon
+            class="mb-4"
+            :message="$gettext('Import the certificate first, then return here and select it from the certificate list.')"
+          />
+          <AButton type="primary" @click="router.push('/certificates/import')">
+            {{ $gettext('Import Certificate') }}
+          </AButton>
+        </template>
+
+        <ARow v-if="certificateInfoCards.length" :gutter="[16, 16]" class="mb-4">
+          <ACol v-for="(certInfo, index) in certificateInfoCards" :key="index" :xs="24" :lg="12">
             <CertInfo :cert="certInfo" />
           </ACol>
         </ARow>
         <AEmpty v-else class="mb-4" :description="$gettext('No certificate configured')" />
 
-        <template v-if="changedCerts.length">
-          <h3>{{ $ngettext('Changed Certificate', 'Changed Certificates', changedCerts.length) }}</h3>
-          <ARow :gutter="[16, 16]" class="mb-4">
-            <ACol v-for="cert in changedCerts" :key="cert.id" :xs="24" :lg="12">
-              <CertInfo :cert="cert.certificate_info" />
-            </ACol>
-          </ARow>
-        </template>
-
-        <ASpace wrap class="mb-4">
-          <ChangeCert @change="handleCertChange" />
+        <div class="certificate-extra-actions">
           <SelfSignedCert />
-        </ASpace>
-
-        <IssueCert :config-name="name" />
+          <IssueCert :config-name="name" />
+        </div>
 
         <ADivider orientation="left">
           {{ $gettext('SSL Protocol Settings') }}
@@ -451,5 +774,29 @@ watch(httpsEnabled, enabled => {
 
 .https-form {
   max-width: 860px;
+}
+
+.certificate-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.certificate-option__name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.certificate-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.certificate-extra-actions {
+  margin-bottom: 16px;
 }
 </style>

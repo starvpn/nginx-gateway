@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/0xJacky/Nginx-UI/model"
@@ -68,6 +69,32 @@ func TestSaveAllowsManagedSiteHostname(t *testing.T) {
 
 	if _, err := os.Stat(filepath.Join(confDir, "sites-available", "example.com")); err != nil {
 		t.Fatalf("expected saved site file: %v", err)
+	}
+}
+
+func TestSaveRefreshesSiteIndex(t *testing.T) {
+	setupSiteMutationTest(t)
+	const name = "example.com"
+	t.Cleanup(func() {
+		siteIndexMutex.Lock()
+		delete(IndexedSites, name)
+		siteIndexMutex.Unlock()
+	})
+
+	err := Save(name, "server {\n    listen 80;\n    server_name example.com;\n}\n", true, 0, nil, "")
+	if err != nil {
+		t.Fatalf("Save returned error: %v", err)
+	}
+	if urls := GetIndexedSite(name).Urls; !slices.Contains(urls, "http://example.com") {
+		t.Fatalf("expected HTTP URL after initial save, got %v", urls)
+	}
+
+	err = Save(name, "server {\n    listen 443 ssl;\n    server_name example.com;\n}\n", true, 0, nil, "")
+	if err != nil {
+		t.Fatalf("Save returned error: %v", err)
+	}
+	if urls := GetIndexedSite(name).Urls; !slices.Contains(urls, "https://example.com") || slices.Contains(urls, "http://example.com") {
+		t.Fatalf("expected refreshed HTTPS URL after save, got %v", urls)
 	}
 }
 

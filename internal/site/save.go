@@ -43,6 +43,10 @@ func Save(name string, content string, overwrite bool, namespaceId uint64, syncN
 		return
 	}
 
+	if err = scanForSite(path, []byte(content)); err != nil {
+		return
+	}
+
 	enabledConfigFilePath, err := ResolveEnabledPath(name)
 	if err != nil {
 		return err
