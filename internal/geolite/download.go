@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/ulikunitz/xz"
 	"github.com/uozi-tech/cosy"
@@ -56,7 +57,7 @@ func GetDBXZPath() string {
 
 // DownloadGeoLiteDB downloads the GeoLite2 database
 func DownloadGeoLiteDB(progressChan chan float64) error {
-	client := &http.Client{}
+	client := &http.Client{Timeout: 2 * time.Minute}
 	req, err := http.NewRequest("GET", DownloadURL, nil)
 	if err != nil {
 		return cosy.WrapErrorWithParams(ErrDownloadFailed, err.Error())

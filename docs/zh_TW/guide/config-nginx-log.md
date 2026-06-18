@@ -7,11 +7,13 @@
 ### IndexingEnabled
 
 - 類型: `boolean`
-- 預設值: `false`
+- 預設值: `true`
 - 環境變數: `NGINX_UI_NGINX_LOG_INDEXING_ENABLED`
 - 版本: `>= v2.2.0`
 
 此選項啟用 Nginx 日誌的索引功能，提供高效能的日誌搜尋和分析能力。
+
+啟用後，GeoIP 分析需要 GeoLite2 City 資料庫。Release 構建會預設內建；如果不可用，自我檢查會提示您下載。
 
 #### 關閉時的行為（基礎模式）
 

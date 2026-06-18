@@ -7,11 +7,13 @@ This section covers configuration options for Nginx log processing and analysis 
 ### IndexingEnabled
 
 - Type: `boolean`
-- Default: `false`
+- Default: `true`
 - Environment Variable: `NGINX_UI_NGINX_LOG_INDEXING_ENABLED`
 - Version: `>= v2.2.0`
 
 This option enables indexing for Nginx logs, which provides high-performance log search and analysis capabilities.
+
+When enabled, GeoIP analysis requires the GeoLite2 City database. Release builds include it by default. If it is unavailable, the self-check will prompt you to download it.
 
 #### Behavior When Disabled (Basic Mode)
 
@@ -98,4 +100,3 @@ Advanced indexing delivers enterprise-grade performance with **~10,000 records/s
 ::: warning Initial Indexing
 When you enable advanced indexing, the system will immediately start indexing existing log files. This initial indexing process may temporarily impact system performance.
 :::
-

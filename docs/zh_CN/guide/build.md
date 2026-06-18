@@ -26,6 +26,8 @@ pnpm build
 
 ::: warning 警告
 在构建后端之前应先构建前端，因为后端将嵌入前端构建的文件。
+
+`go generate` 也会下载 `GeoLite2-City.mmdb.xz` 到 `internal/geolite/assets/`，因此 release 二进制会默认内置 GeoLite2 数据库。
 :::
 
 请在项目的根目录执行以下命令。

@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/0xJacky/Nginx-UI/internal/geolite"
 	"github.com/0xJacky/Nginx-UI/internal/nginx_log/analytics"
 	"github.com/0xJacky/Nginx-UI/internal/nginx_log/indexer"
 	"github.com/0xJacky/Nginx-UI/internal/nginx_log/searcher"
@@ -116,6 +117,10 @@ func InitializeServices(ctx context.Context) {
 // initializeWithDefaults creates services with default configuration.
 func initializeWithDefaults(ctx context.Context) (*searcher.Searcher, analytics.Service, *indexer.ParallelIndexer, *indexer.LogFileManager, error) {
 	logger.Info("Initializing services with default configuration")
+
+	if err := geolite.EnsureBundledDB(); err != nil {
+		logger.Warnf("Failed to install bundled GeoLite2 database, geo-enrichment will be disabled: %v", err)
+	}
 
 	// Initialize global log parser singleton before starting indexer/searcher
 	indexer.InitLogParser()

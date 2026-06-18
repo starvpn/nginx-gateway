@@ -173,7 +173,8 @@ func Init() {
 			Name: translation.C("GeoLite2 database available"),
 			Description: translation.C("Check if the GeoLite2 database is available when log indexing is enabled. " +
 				"The GeoLite2 database is required for geographic IP analysis in log indexing. " +
-				"You can download it from the Preference page or manually place GeoLite2-City.mmdb in the same directory as app.ini"),
+				"Release builds include it by default. You can also download it from the Preference page " +
+				"or manually place GeoLite2-City.mmdb in the same directory as app.ini."),
 			CheckFunc: CheckGeoLiteDB,
 			FixFunc:   FixGeoLiteDB,
 		})

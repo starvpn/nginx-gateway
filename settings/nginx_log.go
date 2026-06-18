@@ -10,7 +10,9 @@ type NginxLog struct {
 	IncrementalIndexInterval int `json:"incremental_index_interval"`
 }
 
-var NginxLogSettings = &NginxLog{}
+var NginxLogSettings = &NginxLog{
+	IndexingEnabled: true,
+}
 
 // GetIncrementalIndexInterval returns the effective incremental indexing interval.
 // Defaults to 15 minutes when not configured or configured with an invalid value.

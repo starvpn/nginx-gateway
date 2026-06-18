@@ -27,6 +27,8 @@ pnpm build
 
 ::: warning
 Before building the backend, the app should be built first because the backend will embed the app distribution.
+
+`go generate` also downloads `GeoLite2-City.mmdb.xz` into `internal/geolite/assets/` so release binaries include the GeoLite2 database by default.
 :::
 
 Please execute the following command in the project root directory.

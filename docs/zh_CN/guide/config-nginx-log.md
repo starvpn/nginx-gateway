@@ -7,11 +7,13 @@
 ### IndexingEnabled
 
 - 类型: `boolean`
-- 默认值: `false`
+- 默认值: `true`
 - 环境变量: `NGINX_UI_NGINX_LOG_INDEXING_ENABLED`
 - 版本: `>= v2.2.0`
 
 此选项启用 Nginx 日志的索引功能，提供高性能的日志搜索和分析能力。
+
+启用后，GeoIP 分析需要 GeoLite2 City 数据库。Release 构建会默认内置；如果不可用，自检会提示您下载。
 
 #### 关闭时的行为（基础模式）
 
@@ -98,4 +100,3 @@
 ::: warning 初始索引
 当您启用高级索引时，系统将立即开始索引现有日志文件。此初始索引过程可能会暂时影响系统性能。
 :::
-
