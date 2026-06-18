@@ -14,6 +14,7 @@ interface SaveOptions {
   omitIncompleteTLSServers?: boolean
   skipTLSValidation?: boolean
   syncResponse?: boolean
+  forceConfigText?: boolean
 }
 
 interface TLSServerIssue {
@@ -137,7 +138,7 @@ export const useSiteEditorStore = defineStore('siteEditor', () => {
     try {
       let content = configText.value
 
-      if (!advanceMode.value) {
+      if (!advanceMode.value && !options.forceConfigText) {
         const tlsServerIssues = getTLSServerIssues()
 
         if (tlsServerIssues.length > 0 && !options.skipTLSValidation) {
@@ -333,6 +334,7 @@ export const useSiteEditorStore = defineStore('siteEditor', () => {
     hasServers,
     getTLSServerIssues,
     getConfigWithoutIncompleteTLSServers,
+    buildConfig,
     dnsLinked,
     linkedDNSName,
     init,

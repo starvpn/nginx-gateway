@@ -4,21 +4,47 @@ import type { SiteStatus } from '@/api/site'
 import { InfoCircleOutlined } from '@ant-design/icons-vue'
 import { StdSelector } from '@uozi-admin/curd'
 import namespace from '@/api/namespace'
+import { NgxUpstream } from '@/components/NgxConfigEditor'
 import NodeSelector from '@/components/NodeSelector'
+import { PortScannerCompact } from '@/components/PortScanner'
 import SyncNodesPreview from '@/components/SyncNodesPreview'
 import { formatDateTime } from '@/lib/helper'
 import { useSettingsStore } from '@/pinia'
 import namespaceColumns from '@/views/namespace/columns'
 import SiteStatusSelect from '@/views/site/components/SiteStatusSelect.vue'
 import ConfigName from '@/views/site/site_edit/components/ConfigName/ConfigName.vue'
+import HttpsSettings from '@/views/site/site_edit/components/Settings/HTTPS.vue'
 import { useSiteEditorStore } from '../SiteEditor/store'
+import Chat from './Chat.vue'
+import ConfigTemplatePanel from './ConfigTemplate.vue'
+import DNS from './DNS.vue'
 
 const settings = useSettingsStore()
 
 const editorStore = useSiteEditorStore()
-const { name, data, ngxConfig, curServerIdx, curServer, curServerDirectives } = storeToRefs(editorStore)
+const { name, data, ngxConfig, curServerIdx, curServer, curServerDirectives, advanceMode } = storeToRefs(editorStore)
 
 const activeModule = ref('site')
+const modulesWithoutServerSelector = ['https', 'dns', 'config-template', 'chat', 'port-scanner', 'load-balance']
+
+const serverOptions = computed(() => {
+  return (ngxConfig.value.servers ?? []).map((server, index) => {
+    const serverName = server.directives?.find(item => item.directive === 'server_name')?.params
+    const listens = server.directives?.filter(item => item.directive === 'listen').map(item => item.params).join(', ')
+    const label = [
+      $gettext('Server %{n}', { n: index + 1 }),
+      serverName,
+      listens ? `(${listens})` : '',
+    ].filter(Boolean).join(' ')
+
+    return {
+      label,
+      value: index,
+    }
+  })
+})
+
+const showServerSelector = computed(() => serverOptions.value.length > 1 && !modulesWithoutServerSelector.includes(activeModule.value))
 
 function ensureServer(): NgxServer {
   if (!ngxConfig.value.servers)
@@ -390,10 +416,6 @@ const redirectReturn = computed({
   },
 })
 
-const upstreamNames = computed(() => {
-  return ngxConfig.value.upstreams?.map(item => item.name).filter(Boolean) ?? []
-})
-
 const serverNames = computed({
   get() {
     return findDirective('server_name')?.params ?? ''
@@ -409,29 +431,6 @@ const httpListen = computed({
   },
   set(value: string) {
     upsertListen(false, value.trim() || '80')
-  },
-})
-
-const httpsListen = computed({
-  get() {
-    return getListenDirective(true)?.params ?? ''
-  },
-  set(value: string) {
-    const current = getListenDirective(true)
-    if (!value.trim()) {
-      const directives = ensureDirectives()
-      const index = current ? directives.indexOf(current) : -1
-      if (index >= 0)
-        directives.splice(index, 1)
-      return
-    }
-
-    if (current) {
-      current.params = value.trim()
-      return
-    }
-
-    upsertListen(true, value.trim())
   },
 })
 
@@ -546,6 +545,11 @@ function handleStatusChanged(event: { status: SiteStatus }) {
 
 <template>
   <div class="px-6 pb-2">
+    <div v-if="showServerSelector" class="server-selector mb-4">
+      <span class="mr-3 text-gray-500">{{ $gettext('Server Block') }}</span>
+      <ASelect v-model:value="curServerIdx" class="min-w-320px" :options="serverOptions" />
+    </div>
+
     <ATabs
       v-model:active-key="activeModule"
       tab-position="left"
@@ -592,9 +596,6 @@ function handleStatusChanged(event: { status: SiteStatus }) {
           <AFormItem :label="$gettext('HTTP Listen')">
             <AInput v-model:value="httpListen" placeholder="80" />
           </AFormItem>
-          <AFormItem :label="$gettext('HTTPS Listen')">
-            <AInput v-model:value="httpsListen" placeholder="443 ssl" />
-          </AFormItem>
           <AFlex gap="large" wrap="wrap">
             <ACheckbox v-model:checked="isIPv6Enabled">
               {{ $gettext('IPv6') }}
@@ -610,6 +611,26 @@ function handleStatusChanged(event: { status: SiteStatus }) {
             :message="$gettext('For IP access with a custom port, put the IP in server_name and set the port in listen, for example listen 8080.')"
           />
         </AForm>
+      </ATabPane>
+
+      <ATabPane key="https" tab="HTTPS">
+        <HttpsSettings />
+      </ATabPane>
+
+      <ATabPane key="dns" tab="DNS">
+        <DNS />
+      </ATabPane>
+
+      <ATabPane v-if="!advanceMode" key="config-template" :tab="$gettext('Config Template')">
+        <ConfigTemplatePanel />
+      </ATabPane>
+
+      <ATabPane key="chat" :tab="$gettext('Chat')">
+        <Chat chat-height="calc(100vh - 320px)" />
+      </ATabPane>
+
+      <ATabPane key="port-scanner" :tab="$gettext('Port Scanner')">
+        <PortScannerCompact />
       </ATabPane>
 
       <ATabPane key="directory" :tab="$gettext('Website Directory')">
@@ -663,21 +684,13 @@ function handleStatusChanged(event: { status: SiteStatus }) {
       </ATabPane>
 
       <ATabPane key="load-balance" :tab="$gettext('Load Balance')">
-        <AForm layout="vertical">
-          <AFormItem :label="$gettext('Upstreams')">
-            <ASelect
-              :value="upstreamNames"
-              mode="multiple"
-              disabled
-              :placeholder="$gettext('No upstreams configured')"
-            />
-          </AFormItem>
-          <AAlert
-            type="info"
-            show-icon
-            :message="$gettext('Configure upstream servers in Basic Mode > Upstream, then use an upstream name as the proxy target, for example http://backend.')"
-          />
-        </AForm>
+        <NgxUpstream />
+        <AAlert
+          class="mt-4"
+          type="info"
+          show-icon
+          :message="$gettext('Use an upstream name as the proxy target, for example http://backend.')"
+        />
       </ATabPane>
 
       <ATabPane key="auth" :tab="$gettext('Basic Auth')">
