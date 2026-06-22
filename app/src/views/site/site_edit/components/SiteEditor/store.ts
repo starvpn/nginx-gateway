@@ -11,6 +11,7 @@ import { useGlobalApp } from '@/composables/useGlobalApp'
 import { translateError } from '@/lib/http/error'
 
 interface SaveOptions {
+  forceBuildConfig?: boolean
   omitIncompleteTLSServers?: boolean
   skipTLSValidation?: boolean
   syncResponse?: boolean
@@ -138,7 +139,7 @@ export const useSiteEditorStore = defineStore('siteEditor', () => {
     try {
       let content = configText.value
 
-      if (!advanceMode.value && !options.forceConfigText) {
+      if ((options.forceBuildConfig || !advanceMode.value) && !options.forceConfigText) {
         const tlsServerIssues = getTLSServerIssues()
 
         if (tlsServerIssues.length > 0 && !options.skipTLSValidation) {

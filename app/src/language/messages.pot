@@ -1320,6 +1320,10 @@ msgstr ""
 msgid "Configuration"
 msgstr ""
 
+#: src/views/site/site_edit/SiteEdit.vue:100
+msgid "Configuration File"
+msgstr ""
+
 #: src/components/InspectConfig/InspectConfig.vue:150
 msgid "Configuration file is test successful"
 msgstr ""

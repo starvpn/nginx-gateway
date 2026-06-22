@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import type { Cert, CertificateInfo } from '@/api/cert'
+import type { Cert } from '@/api/cert'
 import type { NgxDirective, NgxServer } from '@/api/ngx'
 import acme_user from '@/api/acme_user'
 import cert from '@/api/cert'
-import CertInfo from '@/components/CertInfo/CertInfo.vue'
 import { AutoCertState } from '@/constants'
 import IssueCert from '@/views/site/site_edit/components/Cert/IssueCert.vue'
 import SelfSignedCert from '@/views/site/site_edit/components/Cert/SelfSignedCert.vue'
@@ -15,7 +14,7 @@ type HttpMode = 'keep' | 'redirect' | 'disabled'
 type SSLOption = 'existing' | 'manual'
 
 const editorStore = useSiteEditorStore()
-const { name, ngxConfig, curServerIdx, curDirectivesMap, certInfoMap } = storeToRefs(editorStore)
+const { name, ngxConfig, curServerIdx, curDirectivesMap } = storeToRefs(editorStore)
 
 const {
   findDirective,
@@ -42,20 +41,44 @@ function isSSLListen(directive: NgxDirective) {
   return directive.directive === 'listen' && directive.params.split(/\s+/).includes('ssl')
 }
 
+function isHTTPListen(directive: NgxDirective) {
+  return directive.directive === 'listen' && !isSSLListen(directive)
+}
+
 function isIPv6Listen(directive: NgxDirective) {
   return directive.params.trim().startsWith('[::]')
+}
+
+function serverHasAnyListen(server?: NgxServer) {
+  return server?.directives?.some(item => item.directive === 'listen') ?? false
 }
 
 function serverHasSSLListen(server?: NgxServer) {
   return server?.directives?.some(isSSLListen) ?? false
 }
 
+function serverHandlesHTTP(server?: NgxServer) {
+  if (!server)
+    return false
+
+  return server.directives?.some(isHTTPListen)
+    || (!serverHasSSLListen(server) && !serverHasAnyListen(server))
+}
+
 function getTLSServerIndex() {
   return ngxConfig.value.servers?.findIndex(server => serverHasSSLListen(server)) ?? -1
 }
 
+function getHTTPOnlyServerIndex() {
+  return ngxConfig.value.servers?.findIndex(server => serverHandlesHTTP(server) && !serverHasSSLListen(server)) ?? -1
+}
+
 function getHTTPServerIndex() {
-  return ngxConfig.value.servers?.findIndex(server => !serverHasSSLListen(server)) ?? -1
+  const httpOnlyIndex = getHTTPOnlyServerIndex()
+  if (httpOnlyIndex >= 0)
+    return httpOnlyIndex
+
+  return ngxConfig.value.servers?.findIndex(server => serverHandlesHTTP(server)) ?? -1
 }
 
 function getTLSServer() {
@@ -65,6 +88,11 @@ function getTLSServer() {
 
 function getHTTPServer() {
   const index = getHTTPServerIndex()
+  return index >= 0 ? ngxConfig.value.servers[index] : undefined
+}
+
+function getHTTPOnlyServer() {
+  const index = getHTTPOnlyServerIndex()
   return index >= 0 ? ngxConfig.value.servers[index] : undefined
 }
 
@@ -314,6 +342,81 @@ function ensureTLSServer() {
   return tlsServer
 }
 
+function removeTLSDirectives(directives: NgxDirective[]) {
+  for (let i = directives.length - 1; i >= 0; i--) {
+    const item = directives[i]
+    if (isSSLListen(item))
+      directives.splice(i, 1)
+    else if (['ssl_certificate', 'ssl_certificate_key', 'ssl_protocols', 'ssl_ciphers', 'http2'].includes(item.directive))
+      directives.splice(i, 1)
+    else if (item.directive === 'add_header' && item.params.includes('Strict-Transport-Security'))
+      directives.splice(i, 1)
+  }
+}
+
+function ensureHTTPListen(directives: NgxDirective[]) {
+  if (!directives.some(isHTTPListen))
+    directives.unshift({ directive: 'listen', params: '80' })
+
+  if (isIPv6Enabled.value && !directives.some(item => isHTTPListen(item) && isIPv6Listen(item)))
+    directives.unshift({ directive: 'listen', params: '[::]:80' })
+}
+
+function ensureHTTPOnlyServer() {
+  if (!ngxConfig.value.servers)
+    ngxConfig.value.servers = []
+
+  const existingServer = getHTTPOnlyServer()
+  if (existingServer) {
+    ensureHTTPListen(getServerDirectives(existingServer))
+    return existingServer
+  }
+
+  const source = getTLSServer() ?? getHTTPServer() ?? ngxConfig.value.servers[0] ?? { directives: [], locations: [] }
+  const httpServer = cloneServer(source)
+  const directives = getServerDirectives(httpServer)
+
+  removeTLSDirectives(directives)
+  ensureHTTPListen(directives)
+
+  ngxConfig.value.servers.push(httpServer)
+  return httpServer
+}
+
+function removeHTTPListenDirectives(server?: NgxServer) {
+  const directives = getServerDirectives(server)
+  for (let i = directives.length - 1; i >= 0; i--) {
+    if (isHTTPListen(directives[i]))
+      directives.splice(i, 1)
+  }
+}
+
+function removeHTTPConfig() {
+  const servers = ngxConfig.value.servers
+  if (!servers)
+    return
+
+  for (let index = servers.length - 1; index >= 0; index--) {
+    const server = servers[index]
+    const hasSSLListen = serverHasSSLListen(server)
+
+    if (!serverHandlesHTTP(server))
+      continue
+
+    const directives = getServerDirectives(server)
+    removeDirective('return', directives)
+    removeHTTPListenDirectives(server)
+
+    if (!hasSSLListen && servers.length > 1)
+      servers.splice(index, 1)
+  }
+
+  if (curServerIdx.value >= (ngxConfig.value.servers?.length ?? 0))
+    curServerIdx.value = 0
+
+  syncActiveTLSServer()
+}
+
 function removeHTTPSConfig() {
   for (let index = (ngxConfig.value.servers?.length ?? 0) - 1; index >= 0; index--) {
     const server = ngxConfig.value.servers[index]
@@ -396,8 +499,7 @@ const httpMode = computed<HttpMode>({
   get() {
     const httpServer = getHTTPServer()
     const directives = getServerDirectives(httpServer)
-    const hasHTTPListen = directives.some(item => item.directive === 'listen' && !item.params.includes('ssl'))
-    if (!hasHTTPListen)
+    if (!serverHandlesHTTP(httpServer))
       return 'disabled'
 
     const returnDirective = directives.find(item => item.directive === 'return')
@@ -407,23 +509,23 @@ const httpMode = computed<HttpMode>({
     return 'keep'
   },
   set(value: HttpMode) {
-    const httpServer = getHTTPServer() ?? ngxConfig.value.servers?.[0]
-    const directives = getServerDirectives(httpServer)
-
     if (value === 'disabled') {
-      for (let i = directives.length - 1; i >= 0; i--) {
-        if (directives[i].directive === 'listen' && !directives[i].params.includes('ssl'))
-          directives.splice(i, 1)
-      }
-      removeDirective('return', directives)
+      removeHTTPConfig()
       return
     }
 
-    if (!directives.some(item => item.directive === 'listen' && !item.params.includes('ssl')))
-      directives.unshift({ directive: 'listen', params: '80' })
+    const httpServer = value === 'redirect' ? ensureHTTPOnlyServer() : getHTTPServer() ?? ensureHTTPOnlyServer()
+    const directives = getServerDirectives(httpServer)
 
-    if (value === 'redirect')
+    ensureHTTPListen(directives)
+
+    if (value === 'redirect') {
+      ngxConfig.value.servers?.forEach(server => {
+        if (server !== httpServer && serverHasSSLListen(server))
+          removeHTTPListenDirectives(server)
+      })
       upsertDirective('return', '301 https://$host$request_uri', directives)
+    }
     else
       removeDirective('return', directives)
   },
@@ -443,11 +545,6 @@ const selectedCertificateID = computed<number | undefined>({
     if (certificate)
       applyCertificate(certificate)
   },
-})
-
-const selectedCertificate = computed(() => {
-  const id = selectedCertificateID.value
-  return certificates.value.find(certificate => certificate.id === id)
 })
 
 const acmeUserOptions = computed(() => acmeUsers.value.map(user => ({
@@ -471,18 +568,6 @@ const certificateOptions = computed(() => {
 
       return getCertificateExpiryValue(b) - getCertificateExpiryValue(a)
     })
-})
-
-const currentCertInfo = computed<CertificateInfo[]>(() => {
-  const tlsIndex = getTLSServerIndex()
-  return tlsIndex >= 0 ? certInfoMap.value?.[tlsIndex] ?? [] : []
-})
-
-const certificateInfoCards = computed<CertificateInfo[]>(() => {
-  if (selectedCertificate.value?.certificate_info)
-    return [selectedCertificate.value.certificate_info]
-
-  return currentCertInfo.value
 })
 
 const noServerName = computed(() => !curDirectivesMap.value.server_name?.length)
@@ -717,13 +802,6 @@ onMounted(() => {
             {{ $gettext('Import Certificate') }}
           </AButton>
         </template>
-
-        <ARow v-if="certificateInfoCards.length" :gutter="[16, 16]" class="mb-4">
-          <ACol v-for="(certInfo, index) in certificateInfoCards" :key="index" :xs="24" :lg="12">
-            <CertInfo :cert="certInfo" />
-          </ACol>
-        </ARow>
-        <AEmpty v-else class="mb-4" :description="$gettext('No certificate configured')" />
 
         <div class="certificate-extra-actions">
           <SelfSignedCert />

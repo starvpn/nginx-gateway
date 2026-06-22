@@ -1388,6 +1388,10 @@ msgstr "配置模板"
 msgid "Configuration"
 msgstr "配置"
 
+#: src/views/site/site_edit/SiteEdit.vue:100
+msgid "Configuration File"
+msgstr "配置文件"
+
 #: src/components/InspectConfig/InspectConfig.vue:150
 msgid "Configuration file is test successful"
 msgstr "配置文件测试成功"

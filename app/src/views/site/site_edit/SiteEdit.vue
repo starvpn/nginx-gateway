@@ -53,14 +53,12 @@ watch(activeKey, async key => {
   }
 })
 
-watch(advanceMode, value => {
-  if (value)
-    activeKey.value = 'config'
-})
-
 async function save() {
   try {
-    await editorStore.save({ forceConfigText: activeKey.value === 'config' && (advanceMode.value || configFileTouched.value) })
+    await editorStore.save({
+      forceBuildConfig: activeKey.value === 'basic',
+      forceConfigText: activeKey.value === 'config' && (advanceMode.value || configFileTouched.value),
+    })
     configFileTouched.value = false
     message.success($gettext('Saved successfully'))
     inspectConfigRef.value?.test()
@@ -102,7 +100,7 @@ function handleConfigContentUpdate(value: string) {
         <ATabs v-model:active-key="activeKey" class="main-tabs" size="large">
           <ATabPane key="basic" :tab="$gettext('Basic')" />
           <ATabPane key="logs" :tab="$gettext('Logs')" />
-          <ATabPane key="config" :tab="$gettext('Config File')" />
+          <ATabPane key="config" :tab="$gettext('Configuration File')" />
         </ATabs>
       </div>
 
