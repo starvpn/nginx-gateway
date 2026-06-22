@@ -71,12 +71,13 @@ export const useSiteEditorStore = defineStore('siteEditor', () => {
   async function init(_name: string) {
     loading.value = true
     await nextTick()
+    ngxConfigStore.reset()
     name.value = _name
 
     if (name.value) {
       try {
         const r = await site.getItem(encodeURIComponent(name.value))
-        handleResponse(r)
+        await handleResponse(r)
       }
       catch (error) {
         handleParseError(error as CosyError)
@@ -133,6 +134,17 @@ export const useSiteEditorStore = defineStore('siteEditor', () => {
     })
   }
 
+  async function syncTokenizedConfig(content = configText.value) {
+    if (!content.trim())
+      return
+
+    const tokenized = await ngx.tokenize_config(content)
+    ngxConfigStore.setNgxConfig({
+      ...tokenized,
+      name: name.value,
+    })
+  }
+
   async function save(options: SaveOptions = {}) {
     saving.value = true
 
@@ -140,6 +152,9 @@ export const useSiteEditorStore = defineStore('siteEditor', () => {
       let content = configText.value
 
       if ((options.forceBuildConfig || !advanceMode.value) && !options.forceConfigText) {
+        if (options.forceBuildConfig && !(ngxConfig.value.servers?.length))
+          await syncTokenizedConfig()
+
         const tlsServerIssues = getTLSServerIssues()
 
         if (tlsServerIssues.length > 0 && !options.skipTLSValidation) {
@@ -214,12 +229,17 @@ export const useSiteEditorStore = defineStore('siteEditor', () => {
     data.value = r
     autoCert.value = r.auto_cert
     certInfoMap.value = r.cert_info || {}
-    Object.assign(ngxConfig, r.tokenized)
-
-    const ngxConfigStore = useNgxConfigStore()
-
-    if (r.tokenized)
+    if (r.tokenized) {
       ngxConfigStore.setNgxConfig(r.tokenized)
+      return
+    }
+
+    try {
+      await syncTokenizedConfig(r.config)
+    }
+    catch (error) {
+      console.error(error)
+    }
   }
 
   async function handleModeChange(advanced: CheckedType) {

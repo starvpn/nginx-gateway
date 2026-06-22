@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { NgxDirective, NgxLocation, NgxServer } from '@/api/ngx'
 import type { SiteStatus } from '@/api/site'
-import { InfoCircleOutlined } from '@ant-design/icons-vue'
+import { InfoCircleOutlined, SendOutlined } from '@ant-design/icons-vue'
 import { StdSelector } from '@uozi-admin/curd'
 import namespace from '@/api/namespace'
 import { NgxUpstream } from '@/components/NgxConfigEditor'
@@ -20,12 +20,54 @@ import ConfigTemplatePanel from './ConfigTemplate.vue'
 import DNS from './DNS.vue'
 
 const settings = useSettingsStore()
+const { message } = App.useApp()
 
 const editorStore = useSiteEditorStore()
 const { name, data, ngxConfig, curServerIdx, curServer, curServerDirectives, advanceMode } = storeToRefs(editorStore)
 
 const activeModule = ref('site')
 const modulesWithoutServerSelector = ['https', 'dns', 'config-template', 'chat', 'port-scanner', 'load-balance']
+
+interface DomainRow {
+  key: string
+  domain: string
+  port: string
+  ssl: boolean
+}
+
+interface DomainForm {
+  domain: string
+  port: number
+  ssl: boolean
+}
+
+const domainModalVisible = ref(false)
+const domainForm = reactive<DomainForm>({
+  domain: '',
+  port: 80,
+  ssl: false,
+})
+
+const domainColumns = computed(() => [{
+  title: $gettext('Domain'),
+  dataIndex: 'domain',
+  key: 'domain',
+}, {
+  title: $gettext('Port'),
+  dataIndex: 'port',
+  key: 'port',
+  width: 180,
+}, {
+  title: 'SSL',
+  dataIndex: 'ssl',
+  key: 'ssl',
+  width: 180,
+}, {
+  title: $gettext('Actions'),
+  dataIndex: 'actions',
+  key: 'actions',
+  width: 160,
+}])
 
 const serverOptions = computed(() => {
   return (ngxConfig.value.servers ?? []).map((server, index) => {
@@ -83,6 +125,18 @@ function findDirectives(directive: string) {
   return curServerDirectives.value?.filter(item => item.directive === directive) ?? []
 }
 
+function listenHasSSL(params = '') {
+  return params.split(/\s+/).includes('ssl')
+}
+
+function listenIsIPv6(params = '') {
+  return params.trim().startsWith('[::]')
+}
+
+function hasIPv6Listen() {
+  return findDirectives('listen').some(item => listenIsIPv6(item.params))
+}
+
 function upsertDirective(directive: string, params: string) {
   const current = findDirective(directive)
   if (current) {
@@ -107,7 +161,7 @@ function removeDirective(directive: string) {
 function getListenDirective(isSSL: boolean, isIPv6 = false) {
   return findDirectives('listen').find(item => {
     const params = item.params ?? ''
-    return params.includes('ssl') === isSSL && params.trim().startsWith('[::]') === isIPv6
+    return listenHasSSL(params) === isSSL && listenIsIPv6(params) === isIPv6
   })
 }
 
@@ -125,38 +179,110 @@ function upsertListen(isSSL: boolean, params: string) {
 }
 
 function getListenPort(params = '') {
-  const match = params.match(/(?:\[::\]:)?(\d+)/)
-  return match?.[1] ?? ''
+  const listenAddress = params.split(/\s+/).find(Boolean) ?? ''
+  const addressPort = listenAddress.match(/:(\d+)$/)
+
+  if (addressPort)
+    return addressPort[1]
+
+  const plainPort = listenAddress.match(/^(\d+)$/)
+  return plainPort?.[1] ?? ''
 }
 
-function syncIPv6Listen(enabled: boolean) {
-  const directives = ensureDirectives()
-  const httpsParams = getListenDirective(true)?.params ?? ''
-  const httpPort = getListenPort(getListenDirective(false)?.params) || '80'
-  const httpsPort = getListenPort(httpsParams) || '443'
+function replaceListenPort(params: string, port: string) {
+  const parts = params.split(/\s+/).filter(Boolean)
+  if (!parts.length)
+    return port
 
-  for (let i = directives.length - 1; i >= 0; i--) {
-    if (directives[i].directive === 'listen' && directives[i].params.trim().startsWith('[::]'))
-      directives.splice(i, 1)
+  if (parts[0].startsWith('[::]:'))
+    parts[0] = `[::]:${port}`
+  else if (parts[0].includes(':'))
+    parts[0] = parts[0].replace(/:\d+$/, `:${port}`)
+  else
+    parts[0] = port
+
+  return parts.join(' ')
+}
+
+function getServerNameList() {
+  return (findDirective('server_name')?.params ?? '')
+    .split(/\s+/)
+    .map(item => item.trim())
+    .filter(Boolean)
+}
+
+function setServerNameList(domains: string[]) {
+  const uniqueDomains = [...new Set(domains.map(item => item.trim()).filter(Boolean))]
+
+  if (uniqueDomains.length) {
+    upsertDirective('server_name', uniqueDomains.join(' '))
+    return
   }
 
-  if (!enabled)
-    return
-
-  directives.unshift({ directive: 'listen', params: `[::]:${httpPort}` })
-
-  if (httpsParams)
-    directives.unshift({ directive: 'listen', params: `[::]:${httpsPort} ssl` })
+  removeDirective('server_name')
 }
 
-function setDefaultServer(enabled: boolean) {
-  findDirectives('listen').forEach(item => {
-    const parts = item.params.split(/\s+/).filter(Boolean)
-    const next = parts.filter(part => part !== 'default_server')
-    if (enabled)
-      next.push('default_server')
-    item.params = next.join(' ')
-  })
+function getPrimaryHTTPPort() {
+  return getListenPort(getListenDirective(false)?.params)
+    || getListenPort(getListenDirective(true)?.params)
+    || '80'
+}
+
+function syncHTTPPort(port: string, sslEnabled: boolean) {
+  const sslPort = getListenPort(getListenDirective(true)?.params)
+  const directives = ensureDirectives()
+
+  if (sslEnabled && sslPort === port) {
+    for (let i = directives.length - 1; i >= 0; i--) {
+      if (directives[i].directive === 'listen' && !listenHasSSL(directives[i].params))
+        directives.splice(i, 1)
+    }
+    return
+  }
+
+  const current = getListenDirective(false)
+  const ipv6Current = getListenDirective(false, true)
+
+  if (current)
+    current.params = replaceListenPort(current.params, port)
+  else
+    upsertListen(false, port)
+
+  if (hasIPv6Listen()) {
+    if (ipv6Current)
+      ipv6Current.params = replaceListenPort(ipv6Current.params, port)
+    else
+      ensureDirectives().unshift({ directive: 'listen', params: `[::]:${port}` })
+  }
+}
+
+function syncSSLListen(enabled: boolean) {
+  const directives = ensureDirectives()
+
+  if (!enabled) {
+    for (let i = directives.length - 1; i >= 0; i--) {
+      if (directives[i].directive === 'listen' && listenHasSSL(directives[i].params))
+        directives.splice(i, 1)
+    }
+    return
+  }
+
+  const sslPort = getListenPort(getListenDirective(true)?.params) || '443'
+  const sslListen = getListenDirective(true)
+  const ipv6SSLListen = getListenDirective(true, true)
+
+  if (!sslListen)
+    directives.unshift({ directive: 'listen', params: `${sslPort} ssl` })
+
+  if (hasIPv6Listen() && !ipv6SSLListen)
+    directives.unshift({ directive: 'listen', params: `[::]:${sslPort} ssl` })
+}
+
+function parseDomainInput(value: string) {
+  return value
+    .split(/[\s,]+/)
+    .map(item => item.trim())
+    .filter(Boolean)
 }
 
 function getMainLocation() {
@@ -416,41 +542,51 @@ const redirectReturn = computed({
   },
 })
 
-const serverNames = computed({
-  get() {
-    return findDirective('server_name')?.params ?? ''
-  },
-  set(value: string) {
-    upsertDirective('server_name', value.trim())
-  },
+const hasSSLListen = computed(() => {
+  return findDirectives('listen').some(item => listenHasSSL(item.params))
 })
 
-const httpListen = computed({
-  get() {
-    return getListenDirective(false)?.params ?? '80'
-  },
-  set(value: string) {
-    upsertListen(false, value.trim() || '80')
-  },
+const domainRows = computed<DomainRow[]>(() => {
+  const port = getPrimaryHTTPPort()
+  const ssl = hasSSLListen.value
+
+  return getServerNameList().map((domain, index) => ({
+    key: `${domain}-${index}`,
+    domain,
+    port,
+    ssl,
+  }))
 })
 
-const isIPv6Enabled = computed({
-  get() {
-    return findDirectives('listen').some(item => item.params.trim().startsWith('[::]'))
-  },
-  set(value: boolean) {
-    syncIPv6Listen(value)
-  },
-})
+function openDomainModal() {
+  domainForm.domain = ''
+  domainForm.port = Number(getPrimaryHTTPPort()) || 80
+  domainForm.ssl = hasSSLListen.value
+  domainModalVisible.value = true
+}
 
-const isDefaultServer = computed({
-  get() {
-    return findDirectives('listen').some(item => item.params.includes('default_server'))
-  },
-  set(value: boolean) {
-    setDefaultServer(value)
-  },
-})
+function handleAddDomain() {
+  const domains = parseDomainInput(domainForm.domain)
+  const port = String(domainForm.port || 80)
+
+  if (!domains.length || Number(port) < 1 || Number(port) > 65535) {
+    message.warning($gettext('Please fill in all required fields'))
+    return
+  }
+
+  setServerNameList([...getServerNameList(), ...domains])
+  syncSSLListen(domainForm.ssl)
+  syncHTTPPort(port, domainForm.ssl)
+  domainModalVisible.value = false
+}
+
+function deleteDomain(domain: string) {
+  setServerNameList(getServerNameList().filter(item => item !== domain))
+}
+
+function handleDomainSSLChange(checked: boolean | string | number) {
+  syncSSLListen(Boolean(checked))
+}
 
 const siteRoot = computed({
   get() {
@@ -585,32 +721,72 @@ function handleStatusChanged(event: { status: SiteStatus }) {
       </ATabPane>
 
       <ATabPane key="domain" :tab="$gettext('Domain Settings')">
-        <AForm layout="vertical">
-          <AFormItem :label="$gettext('Server Names')">
-            <ATextarea
-              v-model:value="serverNames"
-              :rows="2"
-              placeholder="example.com www.example.com 192.168.1.10"
-            />
-          </AFormItem>
-          <AFormItem :label="$gettext('HTTP Listen')">
-            <AInput v-model:value="httpListen" placeholder="80" />
-          </AFormItem>
-          <AFlex gap="large" wrap="wrap">
-            <ACheckbox v-model:checked="isIPv6Enabled">
-              {{ $gettext('IPv6') }}
-            </ACheckbox>
-            <ACheckbox v-model:checked="isDefaultServer">
-              {{ $gettext('Default Server') }}
-            </ACheckbox>
-          </AFlex>
-          <AAlert
-            class="mt-4"
-            type="info"
-            show-icon
-            :message="$gettext('For IP access with a custom port, put the IP in server_name and set the port in listen, for example listen 8080.')"
-          />
-        </AForm>
+        <div class="domain-settings-panel">
+          <AButton class="mb-4" type="primary" ghost @click="openDomainModal">
+            {{ $gettext('Add Domain') }}
+          </AButton>
+
+          <ATable
+            row-key="key"
+            :columns="domainColumns"
+            :data-source="domainRows"
+            :pagination="false"
+            :scroll="{ x: 720 }"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'domain'">
+                <div class="domain-cell">
+                  <SendOutlined class="domain-cell-icon" />
+                  <span>{{ (record as DomainRow).domain }}</span>
+                </div>
+              </template>
+              <template v-else-if="column.key === 'ssl'">
+                <ASwitch
+                  size="small"
+                  :checked="(record as DomainRow).ssl"
+                  @change="handleDomainSSLChange"
+                />
+              </template>
+              <template v-else-if="column.key === 'actions'">
+                <APopconfirm
+                  :title="$gettext('Are you sure you want to delete?')"
+                  @confirm="deleteDomain((record as DomainRow).domain)"
+                >
+                  <AButton type="link" size="small" danger>
+                    {{ $gettext('Delete') }}
+                  </AButton>
+                </APopconfirm>
+              </template>
+            </template>
+          </ATable>
+
+          <AModal
+            v-model:open="domainModalVisible"
+            :title="$gettext('Add Domain')"
+            @ok="handleAddDomain"
+          >
+            <AForm layout="vertical">
+              <AFormItem :label="$gettext('Domain')" required>
+                <AInput
+                  v-model:value="domainForm.domain"
+                  placeholder="example.com"
+                  @press-enter="handleAddDomain"
+                />
+              </AFormItem>
+              <AFormItem :label="$gettext('Port')" required>
+                <AInputNumber
+                  v-model:value="domainForm.port"
+                  class="w-full"
+                  :min="1"
+                  :max="65535"
+                />
+              </AFormItem>
+              <AFormItem label="SSL">
+                <ASwitch v-model:checked="domainForm.ssl" />
+              </AFormItem>
+            </AForm>
+          </AModal>
+        </div>
       </ATabPane>
 
       <ATabPane key="https" tab="HTTPS">
@@ -881,5 +1057,16 @@ function handleStatusChanged(event: { status: SiteStatus }) {
   :deep(.ant-form) {
     max-width: 760px;
   }
+}
+
+.domain-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.domain-cell-icon {
+  color: #6b7280;
+  font-size: 14px;
 }
 </style>

@@ -5,7 +5,6 @@ import acme_user from '@/api/acme_user'
 import cert from '@/api/cert'
 import { AutoCertState } from '@/constants'
 import IssueCert from '@/views/site/site_edit/components/Cert/IssueCert.vue'
-import SelfSignedCert from '@/views/site/site_edit/components/Cert/SelfSignedCert.vue'
 import { useServerDirectives } from '@/views/site/site_edit/composables/useServerDirectives'
 import dayjs from 'dayjs'
 import { useSiteEditorStore } from '../SiteEditor/store'
@@ -804,7 +803,6 @@ onMounted(() => {
         </template>
 
         <div class="certificate-extra-actions">
-          <SelfSignedCert />
           <IssueCert :config-name="name" />
         </div>
 
