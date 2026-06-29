@@ -63,6 +63,22 @@ sync_bundled_file() {
     fi
 }
 
+copy_missing_top_level_templates() {
+    local template target
+
+    for template in "$TEMPLATE_DIR"/*; do
+        [ -e "$template" ] || continue
+        target="$ETC_NGINX/$(basename "$template")"
+        [ -e "$target" ] && continue
+
+        if cp -rp "$template" "$target"; then
+            log INFO "target absent; copying template to $target"
+        else
+            log WARN "failed to copy missing template to $target"
+        fi
+    done
+}
+
 init_config_main() {
     # Early exit: host_via_ssh mode (must come first; see spec §11).
     if [ "${NGINX_UI_DISABLE_BUNDLED_NGINX:-}" = "true" ]; then
@@ -82,6 +98,10 @@ init_config_main() {
         log INFO "NGINX_UI_PRESERVE_BUNDLED_CONF=true; skipping bundled-conf sync"
         return 0
     fi
+
+    # Existing volumes may contain only conf.d/sites data. Keep custom files,
+    # but seed missing top-level files such as nginx.conf and mime.types.
+    copy_missing_top_level_templates
 
     # Whitelist of bundled files we own and may upgrade.
     if ! sync_bundled_file \

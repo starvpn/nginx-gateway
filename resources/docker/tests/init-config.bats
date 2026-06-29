@@ -9,6 +9,8 @@ setup() {
 
     cp "$BATS_TEST_DIRNAME/fixtures/fixed-default.conf" \
        "$TEMPLATE_DIR/conf.d/nginx-ui.conf"
+    printf 'events {}\nhttp {}\n' > "$TEMPLATE_DIR/nginx.conf"
+    printf 'types {}\n' > "$TEMPLATE_DIR/mime.types"
     # Hash list = current template hash + historical (unfixed) hash.
     sha256sum "$TEMPLATE_DIR/conf.d/nginx-ui.conf" | awk '{print $1}'  > "$HASH_FILE"
     sha256sum "$BATS_TEST_DIRNAME/fixtures/unfixed-default.conf" | awk '{print $1}' >> "$HASH_FILE"
@@ -26,7 +28,20 @@ teardown() { rm -rf "$TMP"; }
     rm -rf "$ETC_NGINX"/*
     run init_config_main
     [ "$status" -eq 0 ]
+    [ -f "$ETC_NGINX/nginx.conf" ]
+    [ -f "$ETC_NGINX/mime.types" ]
     [ -f "$ETC_NGINX/conf.d/nginx-ui.conf" ]
+}
+
+@test "existing non-empty dir seeds missing top-level templates" {
+    printf '# user config\n' > "$ETC_NGINX/custom.conf"
+
+    run init_config_main
+
+    [ "$status" -eq 0 ]
+    diff -q "$ETC_NGINX/nginx.conf" "$TEMPLATE_DIR/nginx.conf"
+    diff -q "$ETC_NGINX/mime.types" "$TEMPLATE_DIR/mime.types"
+    [ -f "$ETC_NGINX/custom.conf" ]
 }
 
 @test "current-template hash is no-op (no backup created)" {

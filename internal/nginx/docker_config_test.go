@@ -67,6 +67,14 @@ func TestOfficialDockerfileBundlesLuaRestyWaf(t *testing.T) {
 	}
 }
 
+func TestOfficialDockerfileSeedsLiveNginxConfig(t *testing.T) {
+	dockerfile := readProjectFile(t, "Dockerfile")
+
+	if !strings.Contains(dockerfile, "cp -a /usr/local/etc/nginx/. /etc/nginx/") {
+		t.Fatalf("Dockerfile should seed /etc/nginx so the image works without a config volume")
+	}
+}
+
 func TestDemoDockerfileBundlesLuaRestyWaf(t *testing.T) {
 	dockerfile := readProjectFile(t, "demo.Dockerfile")
 

@@ -121,9 +121,11 @@ COPY resources/docker/nginx-ui.conf.known-hashes /usr/local/share/nginx-ui/nginx
 # copy nginx-ui executable binary
 COPY nginx-ui-$TARGETOS-$TARGETARCH$TARGETVARIANT/nginx-ui /usr/local/bin/nginx-ui
 
-# remove default config from bundled template and live config dir
+# remove default config from bundled template and live config dir, then seed
+# /etc/nginx so the image works without any config volume mapping.
 RUN rm -f /etc/nginx/conf.d/default.conf \
-    && rm -f /usr/local/etc/nginx/conf.d/default.conf
+    && rm -f /usr/local/etc/nginx/conf.d/default.conf \
+    && cp -a /usr/local/etc/nginx/. /etc/nginx/
 
 # recreate access.log and error.log
 RUN rm -f /var/log/nginx/access.log && \
