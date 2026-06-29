@@ -8415,6 +8415,110 @@ msgstr "防盗链"
 msgid "Redirect"
 msgstr "重定向"
 
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:773
+msgid "Password Access"
+msgstr "密码访问"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:784
+msgid "Cross-domain Access"
+msgstr "跨域访问"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:832
+msgid "Pseudo-static"
+msgstr "伪静态"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:865
+msgid "Other"
+msgstr "其他"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:867
+msgid "Basic Information"
+msgstr "基础信息"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:74
+msgid "Directory"
+msgstr "目录"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:647
+msgid "Site certificates"
+msgstr "网站证书"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:652
+msgid "Site logs"
+msgstr "网站日志"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:657
+msgid "Configured NGINX root directory"
+msgstr "已配置的 NGINX root 目录"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:669
+msgid "Path copied to clipboard"
+msgstr "路径已复制到剪贴板"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:830
+msgid "Root Directory"
+msgstr "root 目录"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:837
+msgid "Site Name"
+msgstr "网站名称"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:841
+msgid "Site Workspace"
+msgstr "网站目录"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:855
+msgid "Use an index subdirectory if you want the ssl, log, and index layout."
+msgstr "如需使用 ssl、log、index 目录布局，请将 root 设置为 index 子目录。"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:860
+msgid "Site Main Directories"
+msgstr "网站主要目录"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:913
+msgid "One default document per line. The generated NGINX index directive will use spaces between files."
+msgstr "每行填写一个默认文档。生成的 NGINX index 指令会使用空格分隔文件。"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:92
+msgid "Current"
+msgstr "当前"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1062
+msgid "Enable Rate Limit"
+msgstr "是否启用"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1067
+msgid "Limit Scheme"
+msgstr "限制方案"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1071
+msgid "Concurrent Limit"
+msgstr "并发限制"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1073
+msgid "Limit the maximum concurrent connections for the current site"
+msgstr "限制当前站点最大并发数"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1084
+msgid "Single IP Limit"
+msgstr "单 IP 限制"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1086
+msgid "Limit the maximum concurrent connections per IP"
+msgstr "限制单个 IP 访问最大并发数"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1097
+msgid "Single Request Rate Limit"
+msgstr "单请求限速"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1099
+msgid "Limit transfer speed per request, unit: KB/s"
+msgstr "限制每个请求的每秒传输速率，单位：KB/s"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1112
+msgid "limit_conn requires matching perserver and perip limit_conn_zone directives in the global NGINX configuration."
+msgstr "limit_conn 需要在全局 NGINX 配置中配置匹配的 perserver 和 perip limit_conn_zone 指令。"
+
 #: src/views/site/site_edit/components/RightPanel/Basic.vue:650
 msgid "Limit Rate"
 msgstr "速率限制"
@@ -8463,6 +8567,26 @@ msgstr "允许请求头"
 msgid "Allow Credentials"
 msgstr "允许携带凭证"
 
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1190
+msgid "Allowed Domains"
+msgstr "允许访问的域名"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1193
+msgid "Allowed Request Methods"
+msgstr "允许的请求方法"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1196
+msgid "Allowed Request Headers"
+msgstr "允许的请求头"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1204
+msgid "Preflight Quick Response"
+msgstr "预检请求快速响应"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1205
+msgid "After enabling, when the browser sends a cross-origin preflight request (OPTIONS request), NGINX automatically returns status 204 and adds the required CORS response headers."
+msgstr "开启后，当浏览器发送跨域预检请求（OPTIONS 请求）时，NGINX 会自动返回 204 状态码并添加所需的跨域响应头。"
+
 #: src/views/site/site_edit/components/RightPanel/Basic.vue:719
 msgid "Trusted Proxies"
 msgstr "可信代理"
@@ -8474,6 +8598,34 @@ msgstr "真实 IP 请求头"
 #: src/views/site/site_edit/components/RightPanel/Basic.vue:731
 msgid "Real IP Recursive"
 msgstr "递归解析真实 IP"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1181
+msgid "Configure trusted IP sources so NGINX can read visitor IP information from HTTP headers and record the real client IP, including in access logs."
+msgstr "通过配置可信 IP 来源，NGINX 可以从 HTTP Header 中读取访客 IP 信息，准确识别并记录访客的真实 IP 地址，包括在访问日志中。"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1182
+msgid "If the frontend is FRP or another tool, enter the frontend proxy IP address, for example 127.0.0.1."
+msgstr "如果前端是 FRP 等工具，可以填写前端代理的 IP 地址，例如 127.0.0.1。"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1183
+msgid "If the frontend is a CDN, enter the CDN IP ranges."
+msgstr "如果前端是 CDN，可以填写 CDN 的 IP 地址段。"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1184
+msgid "If you are unsure, you can enter 0.0.0.0/0 (IPv4) and ::/0 (IPv6). Warning: trusting all sources is unsafe."
+msgstr "如果不确定，可以填写 0.0.0.0/0（IPv4）和 ::/0（IPv6）。注意：允许任意来源 IP 不安全。"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1202
+msgid "IP Source"
+msgstr "IP 来源"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1204
+msgid "Enter one item per line"
+msgstr "按行输入数据，一行一个"
+
+#: src/views/site/site_edit/components/RightPanel/Basic.vue:1213
+msgid "IP Header"
+msgstr "IP Header"
 
 #: src/views/site/site_edit/components/RightPanel/Basic.vue:739
 msgid "Rewrite Rules"
@@ -8490,6 +8642,114 @@ msgstr "允许的 Referer"
 #: src/views/site/site_edit/components/RightPanel/Basic.vue:764
 msgid "Return Rule"
 msgstr "返回规则"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "Notice: Do not use SSL certificates for illegal websites.\nIf HTTPS is unavailable after enabling, check whether port 443 is correctly opened in the security group."
+msgstr "注意：请勿将SSL证书用于非法网站\n如开启后无法使用HTTPS访问，请检查安全组是否正确放行443端口"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "HTTPS Port"
+msgstr "HTTPS 端口"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "For IP-based websites, set this site as the default site to access it normally."
+msgstr "IP 为域名的网站，需要设置为默认站点才能正常访问"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "Certificate Settings"
+msgstr "证书设置"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "HTTP Option"
+msgstr "HTTP 选项"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "HTTP can be accessed directly"
+msgstr "HTTP可直接访问"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "Automatically redirect HTTP to HTTPS"
+msgstr "访问HTTP自动跳转到HTTPS"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "Disable HTTP"
+msgstr "禁止 HTTP"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "Enabling HSTS can improve website security."
+msgstr "开启 HSTS 可以增加网站安全性"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "HSTS Subdomains"
+msgstr "HSTS 子域"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "After enabling, the HSTS policy will apply to all subdomains of the current domain."
+msgstr "启用后，HSTS策略将应用于当前域名的所有子域名"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "HTTP/3 is an upgraded version of HTTP/2, providing faster connections and better performance. Not all browsers support HTTP/3, so enabling it may cause some browsers to fail to access the site."
+msgstr "HTTP/3 是 HTTP/2 的升级版本，提供更快的连接速度和更好的性能，但是不是所有浏览器都支持 HTTP/3，开启后可能会导致部分浏览器无法访问"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "SSL Option"
+msgstr "SSL 选项"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "Select existing certificate"
+msgstr "选择已有证书"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "Import certificate manually"
+msgstr "手动导入证书"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "ACME Account"
+msgstr "Acme 账户"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "Select ACME account"
+msgstr "选择 acme 账号"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "Existing/Self-signed Certificate"
+msgstr "存量/自签证书"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "Certificate"
+msgstr "证书"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "Select certificate"
+msgstr "选择证书"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "server_name is required before applying an ACME certificate."
+msgstr "应用 ACME 证书前需要配置 server_name。"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "Import the certificate first, then return here and select it from the certificate list."
+msgstr "请先导入证书，然后返回此处从证书列表中选择。"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "SSL Protocol Settings"
+msgstr "SSL 协议设置"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "Supported Protocols"
+msgstr "支持的协议版本"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "Cipher Suite"
+msgstr "加密算法"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "TLS 1.1 (insecure)"
+msgstr "TLS 1.1（不安全）"
+
+#: src/views/site/site_edit/components/Settings/HTTPS.vue
+msgid "TLS 1.0 (insecure)"
+msgstr "TLS 1.0（不安全）"
 
 #, fuzzy
 #~ msgid "All checks passed — you may save the configuration."

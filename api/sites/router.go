@@ -27,6 +27,11 @@ func InitRouter(r *gin.RouterGroup) {
 
 	o := r.Group("", middleware.RequireSecureSession())
 	{
+		o.GET("sites/:name/basic_auth", GetBasicAuthFile)
+		o.POST("sites/:name/basic_auth", EnsureBasicAuthFile)
+		o.POST("sites/:name/basic_auth/users", CreateBasicAuthUser)
+		o.PUT("sites/:name/basic_auth/users/:username", UpdateBasicAuthUser)
+		o.DELETE("sites/:name/basic_auth/users/:username", DeleteBasicAuthUser)
 		// batch enable sites
 		o.POST("sites/batch/enable", BatchEnableSites)
 		// batch disable sites

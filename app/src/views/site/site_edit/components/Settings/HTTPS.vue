@@ -32,12 +32,19 @@ const acmeUsers = ref<{ id: number, name: string, email: string }[]>([])
 const acmeUsersLoading = ref(false)
 const selectedAcmeUserID = ref<number>()
 
+const defaultSSLCiphers = 'ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA256:!aNULL:!eNULL:!EXPORT:!DSS:!DES:!RC4:!3DES:!MD5:!PSK:!KRB5:!SRP:!CAMELLIA:!SEED'
+
 function cloneServer(server: NgxServer): NgxServer {
   return JSON.parse(JSON.stringify(server))
 }
 
 function isSSLListen(directive: NgxDirective) {
-  return directive.directive === 'listen' && directive.params.split(/\s+/).includes('ssl')
+  const params = directive.params.split(/\s+/)
+  return directive.directive === 'listen' && (params.includes('ssl') || params.includes('quic'))
+}
+
+function isQUICListen(directive: NgxDirective) {
+  return directive.directive === 'listen' && directive.params.split(/\s+/).includes('quic')
 }
 
 function isHTTPListen(directive: NgxDirective) {
@@ -275,7 +282,7 @@ function applyCertificate(certificate: Cert) {
     { directive: 'ssl_certificate_key', params: certificate.ssl_certificate_key_path },
   )
 
-  selectedAcmeUserID.value = certificate.acme_user_id || undefined
+  selectedAcmeUserID.value = certificate.acme_user_id ?? 0
 }
 
 function clearCertificate() {
@@ -346,9 +353,9 @@ function removeTLSDirectives(directives: NgxDirective[]) {
     const item = directives[i]
     if (isSSLListen(item))
       directives.splice(i, 1)
-    else if (['ssl_certificate', 'ssl_certificate_key', 'ssl_protocols', 'ssl_ciphers', 'http2'].includes(item.directive))
+    else if (['ssl_certificate', 'ssl_certificate_key', 'ssl_protocols', 'ssl_ciphers', 'http2', 'http3'].includes(item.directive))
       directives.splice(i, 1)
-    else if (item.directive === 'add_header' && item.params.includes('Strict-Transport-Security'))
+    else if (item.directive === 'add_header' && (item.params.includes('Strict-Transport-Security') || item.params.includes('Alt-Svc')))
       directives.splice(i, 1)
   }
 }
@@ -426,9 +433,11 @@ function removeHTTPSConfig() {
       const item = directives[i]
       if (item.directive === 'listen' && item.params.includes('ssl'))
         directives.splice(i, 1)
-      else if (['ssl_certificate', 'ssl_certificate_key', 'ssl_protocols', 'ssl_ciphers', 'http2'].includes(item.directive))
+      else if (isQUICListen(item))
         directives.splice(i, 1)
-      else if (item.directive === 'add_header' && item.params.includes('Strict-Transport-Security'))
+      else if (['ssl_certificate', 'ssl_certificate_key', 'ssl_protocols', 'ssl_ciphers', 'http2', 'http3'].includes(item.directive))
+        directives.splice(i, 1)
+      else if (item.directive === 'add_header' && (item.params.includes('Strict-Transport-Security') || item.params.includes('Alt-Svc')))
         directives.splice(i, 1)
     }
 
@@ -462,6 +471,69 @@ function setTLSListen(port: string) {
   else if (ipv6Listen) {
     directives.splice(directives.indexOf(ipv6Listen), 1)
   }
+
+  if (http3Enabled.value)
+    ensureHTTP3Directives(normalizedPort, directives)
+}
+
+function getQUICListenParams(port: string, isIPv6 = false) {
+  const listenPort = isIPv6 ? `[::]:${port}` : port
+  return `${listenPort} quic reuseport`
+}
+
+function getLastListenIndex(directives: NgxDirective[]) {
+  for (let i = directives.length - 1; i >= 0; i--) {
+    if (directives[i].directive === 'listen')
+      return i
+  }
+
+  return -1
+}
+
+function upsertQUICListen(directives: NgxDirective[], port: string, isIPv6 = false) {
+  const params = getQUICListenParams(port, isIPv6)
+  const current = directives.find(item => isQUICListen(item) && isIPv6Listen(item) === isIPv6)
+
+  if (current) {
+    current.params = params
+    return
+  }
+
+  directives.splice(getLastListenIndex(directives) + 1, 0, {
+    directive: 'listen',
+    params,
+  })
+}
+
+function setHTTP3AltSvc(enabled: boolean, port: string, directives: NgxDirective[]) {
+  removeDirectiveWhere('add_header', item => item.params.includes('Alt-Svc'), directives)
+
+  if (!enabled)
+    return
+
+  directives.push({
+    directive: 'add_header',
+    params: `Alt-Svc 'h3=":${port}"; ma=86400'`,
+  })
+}
+
+function ensureHTTP3Directives(port: string, directives: NgxDirective[]) {
+  const normalizedPort = port || '443'
+  upsertDirective('http3', 'on', directives)
+  upsertQUICListen(directives, normalizedPort)
+
+  if (isIPv6Enabled.value)
+    upsertQUICListen(directives, normalizedPort, true)
+  else
+    removeDirectiveWhere('listen', item => isQUICListen(item) && isIPv6Listen(item), directives)
+
+  setHTTP3AltSvc(true, normalizedPort, directives)
+}
+
+function removeHTTP3Directives(directives: NgxDirective[]) {
+  removeDirective('http3', directives)
+  removeDirectiveWhere('listen', isQUICListen, directives)
+  setHTTP3AltSvc(false, '', directives)
 }
 
 const httpsEnabled = computed({
@@ -471,7 +543,9 @@ const httpsEnabled = computed({
   set(value: boolean) {
     if (value) {
       ensureTLSServer()
+      httpMode.value = 'redirect'
       tlsProtocols.value = ['TLSv1.3', 'TLSv1.2']
+      sslCiphers.value = defaultSSLCiphers
       applyBestCertificateIfNeeded()
       return
     }
@@ -546,17 +620,23 @@ const selectedCertificateID = computed<number | undefined>({
   },
 })
 
-const acmeUserOptions = computed(() => acmeUsers.value.map(user => ({
+const acmeUserOptions = computed(() => [{
+  label: $gettext('Existing/Self-signed Certificate'),
+  value: 0,
+}, ...acmeUsers.value.map(user => ({
   label: user.name || user.email,
   value: user.id,
-})))
+}))])
 
 const certificateOptions = computed(() => {
   return certificates.value
     .filter(certificate => certificate.ssl_certificate_path && certificate.ssl_certificate_key_path)
     .filter(certificate => {
-      if (!selectedAcmeUserID.value)
+      if (selectedAcmeUserID.value === undefined)
         return true
+
+      if (selectedAcmeUserID.value === 0)
+        return !certificate.acme_user_id || certificate.id === selectedCertificateID.value
 
       return certificate.acme_user_id === selectedAcmeUserID.value || certificate.id === selectedCertificateID.value
     })
@@ -613,27 +693,32 @@ const hstsIncludeSubdomains = computed({
   },
 })
 
-const http2Enabled = computed({
+const http3Enabled = computed({
   get() {
-    return findDirective('http2', getServerDirectives(getTLSServer()))?.params === 'on'
-      || findDirectives('listen', getServerDirectives(getTLSServer())).some(item => item.params.includes('http2'))
+    const directives = getServerDirectives(getTLSServer())
+    return findDirective('http3', directives)?.params === 'on'
+      || findDirectives('listen', directives).some(isQUICListen)
   },
   set(value: boolean) {
     ensureTLSServer()
     const directives = getServerDirectives(getTLSServer())
-    if (value)
-      upsertDirective('http2', 'on', directives)
+    if (value) {
+      if (!tlsProtocols.value.includes('TLSv1.3'))
+        tlsProtocols.value = ['TLSv1.3', ...tlsProtocols.value]
+
+      ensureHTTP3Directives(httpsPort.value, directives)
+    }
     else
-      removeDirective('http2', directives)
+      removeHTTP3Directives(directives)
   },
 })
 
-const protocolOptions = [
+const protocolOptions = computed(() => [
   { label: 'TLS 1.3', value: 'TLSv1.3' },
   { label: 'TLS 1.2', value: 'TLSv1.2' },
-  { label: 'TLS 1.1 (insecure)', value: 'TLSv1.1' },
-  { label: 'TLS 1.0 (insecure)', value: 'TLSv1' },
-]
+  { label: $gettext('TLS 1.1 (insecure)'), value: 'TLSv1.1' },
+  { label: $gettext('TLS 1.0 (insecure)'), value: 'TLSv1' },
+])
 
 const tlsProtocols = computed<string[]>({
   get() {
@@ -643,8 +728,13 @@ const tlsProtocols = computed<string[]>({
   set(value: string[]) {
     ensureTLSServer()
     const directives = getServerDirectives(getTLSServer())
-    if (value.length)
-      upsertDirective('ssl_protocols', value.join(' '), directives)
+
+    const protocols = http3Enabled.value && !value.includes('TLSv1.3')
+      ? ['TLSv1.3', ...value]
+      : value
+
+    if (protocols.length)
+      upsertDirective('ssl_protocols', protocols.join(' '), directives)
     else
       removeDirective('ssl_protocols', directives)
   },
@@ -652,7 +742,7 @@ const tlsProtocols = computed<string[]>({
 
 const sslCiphers = computed({
   get() {
-    return findDirective('ssl_ciphers', getServerDirectives(getTLSServer()))?.params ?? ''
+    return findDirective('ssl_ciphers', getServerDirectives(getTLSServer()))?.params ?? defaultSSLCiphers
   },
   set(value: string) {
     ensureTLSServer()
@@ -684,28 +774,45 @@ onMounted(() => {
   <div class="https-settings">
     <AAlert
       type="warning"
-      show-icon
-      class="mb-6"
-      :message="$gettext('Do not use SSL certificates for illegal websites. If HTTPS is enabled but unavailable, check whether port 443 is open in your firewall or security group.')"
-    />
+      class="https-helper-alert mb-6"
+    >
+      <template #message>
+        {{ $gettext('Notice: Do not use SSL certificates for illegal websites.\nIf HTTPS is unavailable after enabling, check whether port 443 is correctly opened in the security group.') }}
+      </template>
+    </AAlert>
 
-    <AForm layout="vertical" class="https-form">
+    <AForm
+      layout="horizontal"
+      class="https-form"
+      label-align="right"
+      :colon="false"
+      :label-col="{ style: { width: '128px' } }"
+      :wrapper-col="{ flex: '1' }"
+    >
       <AFormItem :label="$gettext('Enable HTTPS')">
         <ASwitch v-model:checked="httpsEnabled" />
       </AFormItem>
 
       <template v-if="httpsEnabled">
         <AFormItem :label="$gettext('HTTPS Port')">
-          <AInput v-model:value="httpsPort" class="max-w-180px" placeholder="443" />
+          <span class="form-static-value">{{ httpsPort }}</span>
         </AFormItem>
 
-        <AFormItem :label="$gettext('HTTP Option')">
-          <ASelect v-model:value="httpMode" class="max-w-420px">
-            <ASelectOption value="keep">
-              {{ $gettext('Keep HTTP available') }}
-            </ASelectOption>
+        <div class="ip-website-warning">
+          {{ $gettext('For IP-based websites, set this site as the default site to access it normally.') }}
+        </div>
+
+        <ADivider class="settings-divider" orientation="left">
+          {{ $gettext('Certificate Settings') }}
+        </ADivider>
+
+        <AFormItem :label="$gettext('HTTP Option')" required>
+          <ASelect v-model:value="httpMode" class="form-control">
             <ASelectOption value="redirect">
-              {{ $gettext('Redirect HTTP to HTTPS') }}
+              {{ $gettext('Automatically redirect HTTP to HTTPS') }}
+            </ASelectOption>
+            <ASelectOption value="keep">
+              {{ $gettext('HTTP can be accessed directly') }}
             </ASelectOption>
             <ASelectOption value="disabled">
               {{ $gettext('Disable HTTP') }}
@@ -713,22 +820,45 @@ onMounted(() => {
           </ASelect>
         </AFormItem>
 
-        <ADivider orientation="left">
-          {{ $gettext('Certificate Settings') }}
-        </ADivider>
+        <AFormItem label="HSTS">
+          <ACheckbox v-model:checked="hstsEnabled">
+            {{ $gettext('Enable') }}
+          </ACheckbox>
+          <div class="input-help">
+            {{ $gettext('Enabling HSTS can improve website security.') }}
+          </div>
+        </AFormItem>
+
+        <AFormItem :label="$gettext('HSTS Subdomains')">
+          <ACheckbox v-model:checked="hstsIncludeSubdomains" :disabled="!hstsEnabled">
+            {{ $gettext('Enable') }}
+          </ACheckbox>
+          <div class="input-help">
+            {{ $gettext('After enabling, the HSTS policy will apply to all subdomains of the current domain.') }}
+          </div>
+        </AFormItem>
+
+        <AFormItem label="HTTP3">
+          <ACheckbox v-model:checked="http3Enabled">
+            {{ $gettext('Enable') }}
+          </ACheckbox>
+          <div class="input-help">
+            {{ $gettext('HTTP/3 is an upgraded version of HTTP/2, providing faster connections and better performance. Not all browsers support HTTP/3, so enabling it may cause some browsers to fail to access the site.') }}
+          </div>
+        </AFormItem>
 
         <AAlert
           v-if="noServerName"
           type="info"
           show-icon
-          class="mb-4"
+          class="form-offset mb-4"
           :message="$gettext('server_name is required before applying an ACME certificate.')"
         />
 
         <AFormItem :label="$gettext('SSL Option')" required>
-          <ASelect v-model:value="sslOption" class="max-w-420px">
+          <ASelect v-model:value="sslOption" class="form-control">
             <ASelectOption value="existing">
-              {{ $gettext('Use existing certificate') }}
+              {{ $gettext('Select existing certificate') }}
             </ASelectOption>
             <ASelectOption value="manual">
               {{ $gettext('Import certificate manually') }}
@@ -737,13 +867,13 @@ onMounted(() => {
         </AFormItem>
 
         <template v-if="sslOption === 'existing'">
-          <AFormItem :label="$gettext('ACME User')">
+          <AFormItem :label="$gettext('ACME Account')" required>
             <ASelect
               v-model:value="selectedAcmeUserID"
-              class="max-w-420px"
+              class="form-control"
               allow-clear
               show-search
-              :placeholder="$gettext('All ACME users')"
+              :placeholder="$gettext('Select ACME account')"
               :loading="acmeUsersLoading"
               :options="acmeUserOptions"
             />
@@ -752,11 +882,11 @@ onMounted(() => {
           <AFormItem :label="$gettext('Certificate')" required>
             <ASelect
               v-model:value="selectedCertificateID"
-              class="max-w-620px"
+              class="certificate-select"
               allow-clear
               show-search
               option-label-prop="label"
-              :placeholder="$gettext('Select an existing certificate')"
+              :placeholder="$gettext('Select certificate')"
               :loading="certificatesLoading"
               :filter-option="filterCertificateOption"
             >
@@ -794,49 +924,30 @@ onMounted(() => {
           <AAlert
             type="info"
             show-icon
-            class="mb-4"
+            class="form-offset mb-4"
             :message="$gettext('Import the certificate first, then return here and select it from the certificate list.')"
           />
-          <AButton type="primary" @click="router.push('/certificates/import')">
-            {{ $gettext('Import Certificate') }}
-          </AButton>
+          <div class="form-offset">
+            <AButton type="primary" @click="router.push('/certificates/import')">
+              {{ $gettext('Import Certificate') }}
+            </AButton>
+          </div>
         </template>
 
         <div class="certificate-extra-actions">
           <IssueCert :config-name="name" />
         </div>
 
-        <ADivider orientation="left">
+        <ADivider class="settings-divider" orientation="left">
           {{ $gettext('SSL Protocol Settings') }}
         </ADivider>
 
-        <AFormItem label="HSTS">
-          <ACheckbox v-model:checked="hstsEnabled">
-            {{ $gettext('Enable') }}
-          </ACheckbox>
-          <div class="text-gray-400 mt-2">
-            {{ $gettext('Enabling HSTS can improve website security.') }}
-          </div>
-        </AFormItem>
-
-        <AFormItem :label="$gettext('HSTS Subdomains')">
-          <ACheckbox v-model:checked="hstsIncludeSubdomains" :disabled="!hstsEnabled">
-            {{ $gettext('Enable') }}
-          </ACheckbox>
-        </AFormItem>
-
-        <AFormItem label="HTTP/2">
-          <ACheckbox v-model:checked="http2Enabled">
-            {{ $gettext('Enable') }}
-          </ACheckbox>
-        </AFormItem>
-
-        <AFormItem :label="$gettext('Supported Protocols')">
+        <AFormItem :label="$gettext('Supported Protocols')" required>
           <ACheckboxGroup v-model:value="tlsProtocols" :options="protocolOptions" />
         </AFormItem>
 
-        <AFormItem :label="$gettext('Cipher Suite')">
-          <ATextarea v-model:value="sslCiphers" :rows="4" />
+        <AFormItem :label="$gettext('Cipher Suite')" required>
+          <ATextarea v-model:value="sslCiphers" class="cipher-textarea" :rows="4" />
         </AFormItem>
       </template>
     </AForm>
@@ -845,11 +956,67 @@ onMounted(() => {
 
 <style scoped lang="less">
 .https-settings {
-  max-width: 960px;
+  max-width: 1120px;
 }
 
 .https-form {
+  max-width: 960px;
+}
+
+.https-helper-alert {
   max-width: 860px;
+
+  :deep(.ant-alert-message) {
+    white-space: pre-line;
+  }
+}
+
+.form-control {
+  width: 360px;
+  max-width: 100%;
+}
+
+.certificate-select {
+  width: 620px;
+  max-width: 100%;
+}
+
+.cipher-textarea {
+  width: 100%;
+  max-width: 860px;
+}
+
+.form-static-value {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+}
+
+.ip-website-warning {
+  margin: -2px 0 18px 128px;
+  color: #fa8c16;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.settings-divider {
+  max-width: 860px;
+  margin: 18px 0 24px;
+
+  :deep(.ant-divider-inner-text) {
+    font-weight: 600;
+  }
+}
+
+.input-help {
+  margin-top: 8px;
+  color: #8c8c8c;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.form-offset {
+  margin-left: 128px;
 }
 
 .certificate-option {
@@ -874,5 +1041,33 @@ onMounted(() => {
 
 .certificate-extra-actions {
   margin-bottom: 16px;
+}
+
+@media (max-width: 768px) {
+  .https-form {
+    :deep(.ant-form-item) {
+      display: block;
+    }
+
+    :deep(.ant-form-item-label) {
+      width: 100% !important;
+      padding-bottom: 4px;
+      text-align: left;
+    }
+
+    :deep(.ant-form-item-control) {
+      max-width: 100%;
+    }
+  }
+
+  .ip-website-warning,
+  .form-offset {
+    margin-left: 0;
+  }
+
+  .settings-divider,
+  .https-helper-alert {
+    max-width: 100%;
+  }
 }
 </style>

@@ -86,6 +86,30 @@ export interface AutoCertRequest {
   acme_user_id?: number
 }
 
+export interface BasicAuthUser {
+  username: string
+  remark: string
+}
+
+export interface BasicAuthFile {
+  path: string
+  exists: boolean
+  users: BasicAuthUser[]
+}
+
+export interface BasicAuthUserPayload {
+  path: string
+  username: string
+  password: string
+  remark?: string
+}
+
+export interface UpdateBasicAuthUserPayload {
+  path: string
+  password?: string
+  remark?: string
+}
+
 const baseUrl = '/sites'
 
 const site = extendCurdApi(useCurdApi<Site>(baseUrl), {
@@ -101,6 +125,11 @@ const site = extendCurdApi(useCurdApi<Site>(baseUrl), {
   duplicate: (name: string, data: { name: string }) => http.post(`${baseUrl}/${encodeURIComponent(name)}/duplicate`, data),
   advance_mode: (name: string, data: { advanced: boolean }) => http.post(`${baseUrl}/${encodeURIComponent(name)}/advance`, data),
   enableMaintenance: (name: string) => http.post(`${baseUrl}/${encodeURIComponent(name)}/maintenance`),
+  get_basic_auth: (name: string, path: string) => http.get<BasicAuthFile>(`${baseUrl}/${encodeURIComponent(name)}/basic_auth`, { params: { path } }),
+  ensure_basic_auth_file: (name: string, data: { path: string }) => http.post<BasicAuthFile>(`${baseUrl}/${encodeURIComponent(name)}/basic_auth`, data),
+  create_basic_auth_user: (name: string, data: BasicAuthUserPayload) => http.post<BasicAuthUser>(`${baseUrl}/${encodeURIComponent(name)}/basic_auth/users`, data),
+  update_basic_auth_user: (name: string, username: string, data: UpdateBasicAuthUserPayload) => http.put<BasicAuthUser>(`${baseUrl}/${encodeURIComponent(name)}/basic_auth/users/${encodeURIComponent(username)}`, data),
+  delete_basic_auth_user: (name: string, username: string, path: string) => http.delete(`${baseUrl}/${encodeURIComponent(name)}/basic_auth/users/${encodeURIComponent(username)}`, { params: { path } }),
 })
 
 export default site

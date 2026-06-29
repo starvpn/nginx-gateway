@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { CheckedType } from '@/types'
 import { ArrowLeftOutlined, HistoryOutlined } from '@ant-design/icons-vue'
 import CodeEditor from '@/components/CodeEditor/CodeEditor.vue'
 import ConfigHistory from '@/components/ConfigHistory'
@@ -68,14 +67,6 @@ async function save() {
   }
 }
 
-async function handleModeChange(checked: CheckedType) {
-  await editorStore.handleModeChange(checked)
-  if (checked)
-    activeKey.value = 'config'
-  else
-    configFileTouched.value = false
-}
-
 function handleConfigContentUpdate(value: string) {
   const changedByEditor = value !== configText.value
   configText.value = value
@@ -123,16 +114,6 @@ function handleConfigContentUpdate(value: string) {
           </template>
           {{ $gettext('History') }}
         </AButton>
-        <div class="mode-switch">
-          <ASwitch
-            size="small"
-            :disabled="parseErrorStatus"
-            :checked="advanceMode"
-            :loading="loading"
-            @change="handleModeChange"
-          />
-          <span>{{ advanceMode ? $gettext('Advance Mode') : $gettext('Basic Mode') }}</span>
-        </div>
       </div>
 
       <InspectConfig ref="inspectConfig" class="mb-4" banner :namespace-id="data.namespace_id" />
@@ -231,13 +212,6 @@ function handleConfigContentUpdate(value: string) {
 .site-title {
   font-size: 18px;
   font-weight: 600;
-}
-
-.mode-switch {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #6b7280;
 }
 
 .site-edit-content {
